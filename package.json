@@ -1,0 +1,21 @@
+{
+  "name": "myaberdeen-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Terminal-native, read-only MyAberdeen archive client",
+  "type": "module",
+  "bin": {
+    "myab": "./src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check src/cli.js && node --test"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "parse5": "^8.0.1",
+    "playwright-core": "^1.62.0"
+  }
+}

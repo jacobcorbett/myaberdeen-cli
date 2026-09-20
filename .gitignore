@@ -1,0 +1,19 @@
+node_modules/
+*.log
+.DS_Store
+coverage/
+tmp/
+
+
+# Private runtime data must never enter source control.
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+chrome-profile/
+playwright/.auth/
+storage-state*.json
+downloads/
+_archive/

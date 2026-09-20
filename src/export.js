@@ -1,0 +1,85 @@
+import path from 'node:path';
+import fs from 'node:fs';
+import { safeFilename } from './downloads.js';
+
+const DATASETS = [
+  ['content', 'content.json'],
+  ['announcements', 'announcements.json'],
+  ['grades', 'grades.json'],
+  ['schedules', 'schedule.json'],
+  ['conversations', 'conversations.json'],
+  ['messages', 'messages.json'],
+  ['discussion_posts', 'discussion-posts.json']
+];
+
+export function exportArchive(database, config) {
+  const courses = database.db.prepare('SELECT * FROM courses ORDER BY term_name DESC, course_code').all();
+  const index = [];
+  for (const course of courses) {
+    const courseDirectory = path.join(config.downloadDir, safeFilename(course.term_name || 'No term'), safeFilename(course.course_code || course.id));
+    const dataDirectory = path.join(courseDirectory, '_course-data');
+    fs.mkdirSync(dataDirectory, { recursive: true, mode: 0o700 });
+    const counts = {};
+    writeJson(path.join(dataDirectory, 'course.json'), JSON.parse(course.json));
+    for (const [table, filename] of DATASETS) {
+      const rows = database.db.prepare(`SELECT json FROM ${table} WHERE course_id=? ORDER BY rowid`).all(course.id)
+        .map(row => JSON.parse(row.json));
+      counts[table] = rows.length;
+      writeJson(path.join(dataDirectory, filename), rows);
+    }
+    const files = database.db.prepare(`SELECT content_id,title,source_url,local_path,sha256,byte_size,synced_at
+      FROM files WHERE course_id=? ORDER BY title`).all(course.id);
+    counts.files = files.length;
+    writeJson(path.join(dataDirectory, 'files.json'), files);
+    const relativeDirectory = path.relative(config.downloadDir, courseDirectory);
+    index.push({
+      id: course.id,
+      courseCode: course.course_code,
+      name: course.name,
+      term: course.term_name,
+      directory: relativeDirectory,
+      counts
+    });
+  }
+  const archiveDirectory = path.join(config.downloadDir, '_archive');
+  fs.mkdirSync(archiveDirectory, { recursive: true, mode: 0o700 });
+  writeJson(path.join(archiveDirectory, 'index.json'), {
+    exportedAt: new Date().toISOString(),
+    database: config.databasePath,
+    courses: index
+  });
+  const totals = index.reduce((sum, course) => {
+    for (const [key, value] of Object.entries(course.counts)) sum[key] = (sum[key] || 0) + value;
+    return sum;
+  }, {});
+  const lines = [
+    '# MyAberdeen offline archive',
+    '',
+    `Exported: ${new Date().toISOString()}`,
+    '',
+    `Courses: ${index.length}  `,
+    `Content records: ${totals.content || 0}  `,
+    `Announcements: ${totals.announcements || 0}  `,
+    `Grade records: ${totals.grades || 0}  `,
+    `Messages: ${totals.messages || 0}  `,
+    `Discussion posts: ${totals.discussion_posts || 0}  `,
+    `File records: ${totals.files || 0}`,
+    '',
+    'Each course directory contains its downloaded files and a private `_course-data` directory with offline JSON.',
+    '',
+    '## Courses',
+    '',
+    ...index.map(course => `- ${course.courseCode} — ${course.name} (${course.term || 'No term'})`),
+    ''
+  ];
+  writeText(path.join(archiveDirectory, 'README.md'), `${lines.join('\n')}\n`);
+  return { courses: courses.length, directory: archiveDirectory };
+}
+
+function writeJson(target, value) {
+  writeText(target, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function writeText(target, value) {
+  fs.writeFileSync(target, value, { mode: 0o600 });
+}
