@@ -29,7 +29,7 @@ try {
   const run = args => {
     const launcher = path.join(bundle, process.platform === 'win32' ? 'myab.cmd' : 'myab');
     const result = process.platform === 'win32'
-      ? spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `""${launcher}" ${args.join(' ')}"`], { cwd: temp, env, encoding: 'utf8' })
+      ? spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `""${launcher}" ${args.join(' ')}"`], { cwd: temp, env, encoding: 'utf8', windowsVerbatimArguments: true })
       : spawnSync(launcher, args, { cwd: temp, env, encoding: 'utf8' });
     assert.equal(result.status, 0, result.error?.message || result.stderr);
     return result.stdout;
