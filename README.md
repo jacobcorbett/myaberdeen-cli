@@ -10,6 +10,8 @@ myab login
 
 Chrome opens using a dedicated profile. Complete the normal Aberdeen sign-in and multi-factor authentication. Once the Courses page loads, the command verifies the session, closes Chrome, and retains the session locally.
 
+If Microsoft offers **Stay signed in?**, choose **Yes**. Normal commands first check the Blackboard session; if it has expired, they follow Blackboard's **Sign In** entry once to reuse the remembered university login. This happens headlessly and can restore access without another password or MFA prompt. If Microsoft requires interaction, run `myab login`.
+
 The profile is not your everyday Chrome profile. No passwords, cookies, or security tokens are copied into this repository or into the archive database.
 
 ## Commands
@@ -51,7 +53,7 @@ Defaults:
 Override them with `MYAB_STATE_DIR`, `MYAB_PROFILE_DIR`, `MYAB_DATABASE`, `MYAB_DOWNLOAD_DIR`, or `MYAB_CHROME`.
 Override the Obsidian vault used by `merge-vault` with `MYAB_VAULT`.
 
-All Blackboard operations are GET requests. If the session expires, run `myab login` again.
+All course-data operations are GET requests. Authentication uses the site's normal browser sign-in flow. If automatic sign-in cannot restore access, run `myab login` again.
 
 ## Installation and development
 
@@ -74,5 +76,5 @@ and the authenticated Chrome profile stay on this computer. Do not upload runtim
 - API requests stay on the Blackboard origin. File downloads may follow HTTPS redirects to Blackboard subdomains using a separate HTTP client without Blackboard session cookies or security headers. Other destinations are rejected.
 - Exit codes: `0` success, `1` command/fatal error, `2` initial authentication required, `3` partial sync. Partial results are still exported; inspect `myab status` and the sync log.
 - Only one command may use the dedicated Chrome profile at a time. Close that profile's window before running a headless command. The CLI never deletes profile locks.
-- Login waits for Chrome to release the profile before checking the retained session. University-side SSO expiry still requires `myab login`; local cookie retention does not extend server access.
+- Login waits for Chrome to release the profile before checking the retained session. Expired Blackboard sessions can recover through remembered university SSO. Password, MFA, account-choice and consent prompts require `myab login`; local cookie retention does not extend server access. The CLI does not keep a background session alive or change university expiry policies.
 - Blackboard's internal web endpoints can change. Grades and schedule APIs do not guarantee every ungraded assessment or personal timetable entry is present.

@@ -38,7 +38,7 @@ export class BlackboardSession {
     await this.page.goto(`${this.config.baseUrl}/ultra/course`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await this.page.bringToFront();
     await this.waitForXsrf(15_000);
-    if (requireAuthentication) await this.verifyAuthentication();
+    if (requireAuthentication) await this.ensureAuthentication();
     return this;
   }
 
@@ -102,6 +102,36 @@ export class BlackboardSession {
     const user = await this.getJson('/learn/api/v1/users/me?expand=systemRoles,insRoles', { allowAuthError: true });
     if (!user?.id) throw new AuthenticationRequiredError();
     return user;
+  }
+
+  async ensureAuthentication() {
+    try {
+      return await this.verifyAuthentication();
+    } catch (error) {
+      if (!(error instanceof AuthenticationRequiredError)) throw error;
+    }
+
+    // A Blackboard session can expire while the university SSO session is still
+    // valid. Follow the site's own sign-in entry once to reuse that session.
+    // Never interact with password, MFA, account-choice or consent prompts.
+    if (new URL(this.page.url()).origin !== new URL(this.config.baseUrl).origin) {
+      throw new AuthenticationRequiredError();
+    }
+    const signIn = this.page.getByRole('link', { name: 'Sign In', exact: true })
+      .or(this.page.getByRole('button', { name: 'Sign In', exact: true })).first();
+    if (!await signIn.isVisible()) throw new AuthenticationRequiredError();
+    this.xsrfToken = null;
+    try {
+      await signIn.click({ timeout: 10_000 });
+      await this.page.waitForURL(url => url.origin === new URL(this.config.baseUrl).origin
+        && url.pathname.startsWith('/ultra/'), { timeout: 30_000, waitUntil: 'domcontentloaded' });
+    } catch (error) {
+      // Browser timeout messages may contain SSO URLs. Keep diagnostics private.
+      if (error.name === 'TimeoutError') throw new AuthenticationRequiredError();
+      throw new Error('Could not complete the MyAberdeen sign-in redirect. Retry the command.');
+    }
+    await this.waitForXsrf(15_000);
+    return await this.verifyAuthentication();
   }
 
   headers() {

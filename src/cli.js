@@ -35,6 +35,7 @@ try {
 async function login() {
   console.log('Opening the dedicated MyAberdeen Chrome profile.');
   console.log('Complete the Aberdeen sign-in in that window; it will close after verification.');
+  console.log('If Microsoft asks "Stay signed in?", choose Yes to allow future automatic sign-in.');
   const session = new BlackboardSession(config, { headless: false });
   let authenticatedCookies = null;
   try {
