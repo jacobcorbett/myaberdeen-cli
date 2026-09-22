@@ -1,5 +1,12 @@
 # MyAberdeen CLI agent guidance
 
+## Operator skill
+
+For installation, updates, course lookups and archive operations, read
+[`skills/myaberdeen-cli/SKILL.md`](skills/myaberdeen-cli/SKILL.md). Keep that portable
+skill aligned with CLI behaviour when changing commands, requirements or setup.
+Do not add personal paths, credentials or real course data to it.
+
 ## Purpose
 
 This is Jacob's local, terminal-native MyAberdeen archive client. It uses a dedicated persistent Chrome profile so normal operations can run headlessly after an interactive university login.

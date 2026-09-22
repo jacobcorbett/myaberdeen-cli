@@ -7,6 +7,8 @@ A private, read-only terminal client for the University of Aberdeen's Blackboard
 Use Node **22.13+ on the 22 branch, or Node 24+**, and an installed Google Chrome. Node 23 is not supported. Runtime code uses `node:sqlite`; no extra browser is downloaded.
 
 ```sh
+git clone https://github.com/jacobcorbett/myaberdeen-cli.git
+cd myaberdeen-cli
 npm ci
 npm link
 myab login
@@ -16,6 +18,30 @@ myab doctor --live
 Complete Aberdeen's normal password/MFA flow yourself. If Microsoft offers **Stay signed in?**, choose **Yes**. The CLI can reuse remembered SSO when the Blackboard session expires; it cannot override university expiry or MFA requirements. Authentication state stays inside the private Chrome profile.
 
 Interactive login launches the configured Chrome executable. Defaults cover macOS, standard Google Chrome installations on Linux, and Windows; override `MYAB_CHROME` for another installation. Live SSO has been verified on macOS. CI checks the deterministic code on macOS and Linux; other live platform/login combinations still need local verification.
+
+## AI agent skill and updates
+
+The portable [MyAberdeen CLI skill](skills/myaberdeen-cli/SKILL.md) covers installation, authentication, archive-first queries, scoped refreshes, troubleshooting and updates from GitHub. Give an AI assistant the repository URL and ask it to read that file. It contains no account data and works without this author's personal vault or agent setup.
+
+For an agent that supports installed skills, copy or link the whole `skills/myaberdeen-cli` directory into its configured skills directory. A link follows checkout updates; a copied skill must be refreshed after updating. Agents working in this repository are routed to it by `AGENTS.md`.
+
+Example request:
+
+> Read `skills/myaberdeen-cli/SKILL.md`, install this CLI, help me sign in, and configure only the courses I select. When I ask for an update, check GitHub, preserve my local state and changes, update the CLI and skill, and verify the installed revision.
+
+The repository currently requires GitHub access. There is no published npm package or built-in self-updater. For updates, first inspect `git status`, verify `origin`, run `git fetch origin`, and review incoming changes. On a clean `main` checkout that can fast-forward, run these commands in order, stopping if any fails:
+
+```sh
+git merge --ff-only origin/main
+npm ci
+npm run check
+npm link
+myab help
+myab doctor
+git rev-parse HEAD
+```
+
+Preserve local edits and pinned/forked installations instead of resetting them. Re-read the updated README and skill for changed requirements. State, authentication and downloads remain outside the checkout. `myab doctor` checks local health; `myab doctor --live` separately checks authentication. Neither a software update nor skill installation automatically downloads courses or creates a schedule.
 
 ## Select current courses explicitly
 
