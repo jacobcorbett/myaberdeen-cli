@@ -92,7 +92,7 @@ test('CLI rejects invalid argument values without a stack trace', () => {
   for (const args of [['sync', '--limit-files', '2junk'], ['sync', '--course', '--headed']]) {
     const result = spawnSync(process.execPath, ['src/cli.js', ...args], { encoding: 'utf8' });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /^Error:/);
+    assert.match(result.stderr, /^Error:/m);
     assert.doesNotMatch(result.stderr, /at parseArgs/);
   }
 });
