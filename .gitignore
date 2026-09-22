@@ -17,3 +17,8 @@ playwright/.auth/
 storage-state*.json
 downloads/
 _archive/
+
+*.bak
+text-cache/
+operation.lock/
+operation.lock.recovery/

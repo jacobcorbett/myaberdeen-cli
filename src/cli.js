@@ -1,42 +1,158 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import path from 'node:path';
 import { getConfig, prepareLocalState } from './config.js';
 import { BlackboardSession, AuthenticationRequiredError } from './browser.js';
 import { getAccountOverview, courseFromMembership, courseCode, selectCourses } from './api.js';
 import { ArchiveDatabase } from './database.js';
 import { syncArchive } from './sync.js';
 import { exportArchive } from './export.js';
-import { mergeVault } from './merge.js';
+import { mergeVault, repairLocalIndex } from './merge.js';
+import { extractFiles } from './extract.js';
+import { parseArgs, courseQueries, resumedOptions } from './cli-options.js';
+import { acquireLock, safeMessage, throwIfAborted } from './io.js';
+import { brief, verifyFiles, relocationPlan, applyRelocation, localDoctor } from './health.js';
 
-const config = getConfig();
-let command, options;
-
+let config, options, command, release, activeSession;
+const controller = new AbortController();
+const onSignal = signal => { controller.abort(new Error(`Cancelled by ${signal}.`)); process.exitCode = signal === 'SIGINT' ? 130 : 143; if (activeSession) activeSession.close().catch(() => {}); };
+process.once('SIGINT', () => onSignal('SIGINT')); process.once('SIGTERM', () => onSignal('SIGTERM'));
 try {
   ({ command, options } = parseArgs(process.argv.slice(2)));
+  config = getConfig();
   if (command === 'help') printHelp();
-  else if (command === 'paths') printPaths();
-  else if (command === 'login') await login();
-  else if (command === 'courses') await listCourses();
-  else if (command === 'sync' || command === 'download') await sync(command === 'download' || options.downloadFiles);
-  else if (command === 'export') exportData();
-  else if (command === 'merge-vault') mergeData();
-  else if (command === 'status') status();
-  else throw new Error(`Unknown command: ${command}\nRun: myab help`);
-} catch (error) {
-  if (error instanceof AuthenticationRequiredError) {
-    console.error(error.message);
-    process.exitCode = 2;
-  } else {
-    console.error(`Error: ${error.message}`);
-    process.exitCode = 1;
+  else if (command === 'paths') output(config);
+  else {
+    const mutates = ['login', 'sync', 'check', 'download', 'refresh', 'repair', 'extract'].includes(command) || ['export', 'merge-vault'].includes(command) && !options.dryRun || command === 'relocate-files' && options.apply;
+    if (mutates) release = acquireLock(config.stateDir);
+    if (command === 'login') await login();
+    else if (command === 'courses') await withSession(async session => {
+      const { memberships, terms } = await getAccountOverview(session);
+      const names = new Map(terms.map(t => [t.id, t.name]));
+      const courses = selected(memberships.map(m => { const c = courseFromMembership(m); return { ...c, term_name: names.get(c?.termId) }; })).slice(0, options.limitCourses);
+      if (options.json) output(courses); else for (const c of courses) console.log(`${courseCode(c)}\t${c.name || ''}\t${c.id}`);
+    });
+    else if (['sync', 'check', 'download', 'refresh'].includes(command)) await runSync();
+    else if (command === 'doctor') {
+      const result = localDoctor(config);
+      if (options.live) { try { await withSession(async () => { result.authentication = 'verified'; }); } catch (e) { result.authentication = e instanceof AuthenticationRequiredError ? 'required' : 'unavailable'; result.error = safeMessage(e); process.exitCode = e instanceof AuthenticationRequiredError ? 2 : 1; } }
+      if (fs.existsSync(config.databasePath)) {
+        const db = new ArchiveDatabase(config.databasePath, { readOnly: true });
+        try { result.databaseIntegrity = db.db.prepare('PRAGMA quick_check').get().quick_check; result.schemaVersion = db.db.prepare('PRAGMA user_version').get().user_version; result.lastRun = db.status().lastRun; } finally { db.close(); }
+      }
+      output(result);
+    } else await localCommand();
   }
-}
+} catch (error) {
+  console.error(`Error: ${safeMessage(error)}`);
+  if (!controller.signal.aborted) process.exitCode = error instanceof AuthenticationRequiredError ? 2 : 1;
+} finally { if (release) release(); }
 
+function selected(courses, query = courseQueries(config, options)) {
+  let result = selectCourses(courses, query);
+  if (options.term) result = result.filter(c => String(c.term_name || c.termId || '').toLowerCase().includes(options.term.toLowerCase()));
+  if (!result.length && (options.course || options.profile || options.term)) throw new Error('No courses match this selection.');
+  return result;
+}
+function openDatabase(readOnly = false) {
+  if (readOnly && !fs.existsSync(config.databasePath)) throw new Error('No local archive yet. Run: myab check --course <code>');
+  const database = new ArchiveDatabase(config.databasePath, { readOnly });
+  if (readOnly && database.db.prepare('PRAGMA user_version').get().user_version < 2 && command !== 'status') { database.close(); throw new Error('Archive needs migration. Run: myab repair'); }
+  return database;
+}
+async function localCommand() {
+  const writable = command === 'repair' || command === 'extract' || (['export', 'merge-vault'].includes(command) && !options.dryRun) || command === 'relocate-files' && options.apply;
+  const database = openDatabase(!writable);
+  try {
+    if (command === 'repair') {
+      const indexedFiles = fs.existsSync(path.join(config.vaultRoot, 'Uni')) ? repairLocalIndex(database, config) : 0;
+      output({ indexedFiles, backup: database.backupPath || null, integrity: database.db.prepare('PRAGMA quick_check').get().quick_check }); return;
+    }
+    const courses = selected(database.db.prepare('SELECT * FROM courses ORDER BY course_code').all());
+    const courseIds = courses.map(c => c.id);
+    if (command === 'status' || command === 'brief') {
+      if (command === 'status' && database.db.prepare('PRAGMA user_version').get().user_version < 2) output(database.status());
+      else output(brief(database, config, courseIds));
+    } else if (command === 'changes') {
+      const changes = database.changes({ courseIds, since: options.since || 0, limit: options.limit || 100 });
+      output({ changes, nextCursor: changes.at(-1)?.id || options.since || 0 });
+    } else if (command === 'show') {
+      if (courseIds.length !== 1) throw new Error('show requires exactly one selected course.');
+      const row = database.db.prepare('SELECT * FROM content WHERE course_id=? AND id=?').get(courseIds[0], options.id);
+      if (!row) throw new Error('Content item not found in the local archive.');
+      output({ ...JSON.parse(row.json), _archive: database.provenance('content', row) });
+    } else if (command === 'extract') { const result = extractFiles(database, config, { courseIds }); output(result); if (result.errors.length) process.exitCode = 3; }
+    else if (command === 'verify-files') { const result = verifyFiles(database, { courseIds }); output(result); if (result.missing || result.mismatched) process.exitCode = 3; }
+    else if (command === 'export') output(options.dryRun ? { dryRun: true, courses: courses.map(c => ({ id: c.id, code: c.course_code })) } : exportArchive(database, config, { courseIds }));
+    else if (command === 'merge-vault') {
+      const result = mergeVault(database, config, { courseIds, dryRun: !!options.dryRun, deduplicate: !options.keepDuplicates });
+      if (!options.dryRun) exportArchive(database, config, { courseIds }); output(result);
+    } else if (command === 'relocate-files') {
+      const result = relocationPlan(database, { from: options.from, to: options.to, courseIds });
+      if (options.apply) result.updated = applyRelocation(database, result); output(result);
+      if (result.skipped.length) process.exitCode = 3;
+    }
+  } finally { database.close(); }
+}
+async function runSync() {
+  let database;
+  try {
+    if (!options.dryRun) { prepareLocalState(config); database = openDatabase(); database.recoverInterruptedRuns(); }
+    let resumeIds, downloadFiles = ['download', 'refresh'].includes(command) || !!options.downloadFiles;
+    if (options.resume) {
+      if (!database) database = openDatabase(true);
+      const run = database.db.prepare('SELECT * FROM sync_runs WHERE id=?').get(options.resume);
+      if (!run) throw new Error('Resume run does not exist.');
+      if (!JSON.parse(run.scope_json).length) throw new Error('This run ended before selecting courses; rerun the original explicit selection.');
+      const finished = new Set(database.db.prepare("SELECT course_id FROM course_runs WHERE run_id=? AND status='completed'").all(run.id).map(c => c.course_id));
+      resumeIds = JSON.parse(run.scope_json).filter(id => !finished.has(id));
+      options = resumedOptions(options, JSON.parse(run.options_json));
+      downloadFiles = options.downloadFiles;
+      if (!resumeIds.length) { output({ status: 'nothing-to-resume' }); return; }
+    }
+    await withSession(async session => {
+      if (options.dryRun || options.term) {
+        const { memberships, terms } = await getAccountOverview(session), names = new Map(terms.map(t => [t.id, t.name]));
+        const courses = selected(memberships.map(m => { const c = courseFromMembership(m); return { ...c, term_name: names.get(c?.termId) }; }), resumeIds || courseQueries(config, options)).slice(0, options.limitCourses);
+        if (options.dryRun) { output({ dryRun: true, downloadFiles, courses }); return; }
+        resumeIds = courses.map(c => c.id);
+      }
+      const result = await syncArchive({ session, database, config, courseQuery: courseQueries(config, options), selectedIds: resumeIds, resumeFrom: options.resume, limitCourses: options.limitCourses, limitFiles: options.limitFiles, downloadFiles, deep: !!options.deep, signal: controller.signal, onProgress: message => console.error(message) });
+      exportArchive(database, config, { courseIds: result.courseIds });
+      if (options.extract) { result.extraction = extractFiles(database, config, { courseIds: result.courseIds }); if (result.extraction.errors.length) process.exitCode = 3; }
+      output(result);
+      if (result.errors || result.deferredFiles) process.exitCode = 3;
+    });
+  } finally { if (database) database.close(); }
+}
+async function withSession(callback) {
+  const session = new BlackboardSession(config, { headless: !options.headed, signal: controller.signal }); activeSession = session;
+  try { await session.open(); return await callback(session); }
+  finally { await session.close(); activeSession = null; }
+}
+function output(value) { console.log(JSON.stringify(value, null, 2)); }
+function printHelp() {
+  console.log(`Usage: myab <command> [options]
+
+Network: login, courses, check (metadata), sync, refresh/download (metadata and files)
+Offline: brief/status, changes, show, extract, export, merge-vault, verify-files, relocate-files
+Maintenance: doctor [--live], repair, paths
+
+Select: --course <ID/code/name> (repeatable), --term <name>, --profile <name>, --active, --all
+Mutating/archive commands require explicit scope. --active uses config.profiles.current.
+Preview: --dry-run on check/sync/refresh/download/export/merge-vault
+Sync: --limit-courses N, --limit-files N, --deep, --resume <run-id>, --headed, --extract
+Read: changes --since <cursor-or-ISO-date> [--limit N]; show --course <code> --id <content-id>
+Relocate: --from <old-root> --to <new-root> [--apply]; destinations are hash-verified
+Merge: --keep-duplicates; preview generated notes and removals with --dry-run
+All structured output is JSON; --json is also accepted on data commands.
+Exit: 0 success, 1 error, 2 login required, 3 partial/limited, 130/143 cancelled`);
+}
 async function login() {
   console.log('Opening the dedicated MyAberdeen Chrome profile.');
   console.log('Complete the Aberdeen sign-in in that window; it will close after verification.');
   console.log('If Microsoft asks "Stay signed in?", choose Yes to allow future automatic sign-in.');
-  const session = new BlackboardSession(config, { headless: false });
+  const session = new BlackboardSession(config, { headless: false, signal: controller.signal }); activeSession = session;
   let authenticatedCookies = null;
   try {
     await session.openInteractive();
@@ -49,6 +165,7 @@ async function login() {
     }
     const deadline = Date.now() + 15 * 60_000;
     while (Date.now() < deadline) {
+      throwIfAborted(controller.signal);
       await session.waitForXsrf(1_000);
       if (session.xsrfToken) {
         try {
@@ -67,7 +184,7 @@ async function login() {
     await session.close();
   }
 
-  const persistenceSession = new BlackboardSession(config, { headless: true });
+  const persistenceSession = new BlackboardSession(config, { headless: true, signal: controller.signal }); activeSession = persistenceSession;
   try {
     await persistenceSession.open({ requireAuthentication: false });
     const retainedUntil = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
@@ -85,162 +202,4 @@ async function login() {
     authenticatedCookies = null;
     await persistenceSession.close();
   }
-}
-
-async function listCourses() {
-  await withSession(async session => {
-    const { memberships } = await getAccountOverview(session);
-    const selected = selectCourses(memberships, options.course);
-    for (const membership of memberships) {
-      const course = courseFromMembership(membership);
-      if (!course || !selected.some(candidate => candidate.id === course.id)) continue;
-      console.log(`${courseCode(course)}\t${course.name || ''}\t${course.id}`);
-    }
-    console.log(`\n${selected.length} course${selected.length === 1 ? '' : 's'}.`);
-  });
-}
-
-async function sync(downloadFiles) {
-  prepareLocalState(config);
-  const database = new ArchiveDatabase(config.databasePath);
-  try {
-    await withSession(async session => {
-      const result = await syncArchive({
-        session,
-        database,
-        config,
-        courseQuery: options.course,
-        limitCourses: options.limitCourses,
-        limitFiles: options.limitFiles,
-        downloadFiles,
-        onProgress: message => console.log(message)
-      });
-      if (result.errors) process.exitCode = 3;
-      console.log(`Sync ${result.status}: ${result.errors} errors; ${result.courses} course${result.courses === 1 ? '' : 's'}.`);
-      if (downloadFiles) console.log(`Files: ${config.downloadDir}`);
-      console.log(`Archive: ${config.databasePath}`);
-      const exported = exportArchive(database, config);
-      console.log(`Offline course data: ${exported.directory}`);
-    });
-  } finally {
-    database.close();
-  }
-}
-
-function exportData() {
-  prepareLocalState(config);
-  if (!fs.existsSync(config.databasePath)) throw new Error('No local archive yet. Run: myab sync');
-  const database = new ArchiveDatabase(config.databasePath);
-  try {
-    const result = exportArchive(database, config);
-    console.log(`Exported ${result.courses} courses to ${result.directory}`);
-  } finally {
-    database.close();
-  }
-}
-
-function mergeData() {
-  prepareLocalState(config);
-  if (!fs.existsSync(config.databasePath)) throw new Error('No local archive yet. Run: myab sync');
-  const database = new ArchiveDatabase(config.databasePath);
-  try {
-    const result = mergeVault(database, config, { deduplicate: true });
-    exportArchive(database, config);
-    console.log(`Indexed ${result.indexedFiles} existing university files.`);
-    console.log(`Linked ${result.linkedRecords} Blackboard records to canonical vault files.`);
-    console.log(`Removed ${result.removedFiles} byte-identical raw duplicates (${Math.round(result.removedBytes / 1048576)} MiB).`);
-    console.log(`Integrated ${result.moduleCourses} modules and ${result.resourceCourses} university resource areas.`);
-  } finally {
-    database.close();
-  }
-}
-
-function status() {
-  if (!fs.existsSync(config.databasePath)) {
-    console.log('No local archive yet. Run: myab sync');
-    printPaths();
-    return;
-  }
-  const database = new ArchiveDatabase(config.databasePath);
-  try {
-    const { counts, lastRun } = database.status();
-    console.log(`Courses: ${counts.courses}`);
-    console.log(`Content items: ${counts.content}`);
-    console.log(`Announcements: ${counts.announcements}`);
-    console.log(`Grades: ${counts.grades}`);
-    console.log(`Schedule entries: ${counts.schedules}`);
-    console.log(`Conversations: ${counts.conversations}`);
-    console.log(`Messages: ${counts.messages}`);
-    console.log(`Discussion posts: ${counts.discussion_posts}`);
-    console.log(`Files recorded: ${counts.files}`);
-    console.log(`Existing vault files indexed: ${counts.local_files}`);
-    console.log(`Latest sync errors: ${counts.sync_errors}`);
-    if (lastRun) console.log(`Last sync: ${lastRun.status} at ${lastRun.finished_at || lastRun.started_at}`);
-  } finally {
-    database.close();
-  }
-}
-
-async function withSession(callback) {
-  const session = new BlackboardSession(config, { headless: !options.headed });
-  try {
-    await session.open();
-    return await callback(session);
-  } finally {
-    await session.close();
-  }
-}
-
-function printPaths() {
-  console.log(`State: ${config.stateDir}`);
-  console.log(`Chrome profile: ${config.profileDir}`);
-  console.log(`Archive: ${config.databasePath}`);
-  console.log(`Downloads: ${config.downloadDir}`);
-}
-
-function printHelp() {
-  console.log(`Usage: myab <command> [options]
-
-Commands:
-  login       Open the dedicated profile for Aberdeen sign-in
-  courses     List live courses (headless)
-  sync        Archive courses, content, announcements, grades and schedules
-  download    Sync and download Blackboard files, including embedded attachments
-  export      Write per-course offline JSON alongside downloaded files
-  merge-vault Merge with the existing Obsidian university system
-  status      Show local archive counts
-  paths       Show local profile, database and download paths
-
-Options:
-  --course <text>       Select by course ID, code or name fragment
-  --limit-courses <n>   Process only the first n matching courses
-  --limit-files <n>     Attempt at most n file downloads during this run
-  --download-files      Download files during sync
-  --headed              Show Chrome for diagnosis
-  -h, --help            Show this help`);
-}
-
-function parseArgs(args) {
-  if (!args.length || args.includes('-h') || args.includes('--help')) return { command: 'help', options: {} };
-  const command = args[0];
-  const parsed = { course: null, limitCourses: null, limitFiles: null, downloadFiles: false, headed: false };
-  for (let index = 1; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === '--course') parsed.course = requireValue(args, ++index, arg);
-    else if (arg === '--limit-courses') {
-      parsed.limitCourses = Number(requireValue(args, ++index, arg));
-      if (!Number.isSafeInteger(parsed.limitCourses) || parsed.limitCourses < 1) throw new Error('--limit-courses must be a positive integer.');
-    } else if (arg === '--limit-files') {
-      parsed.limitFiles = Number(requireValue(args, ++index, arg));
-      if (!Number.isSafeInteger(parsed.limitFiles) || parsed.limitFiles < 1) throw new Error('--limit-files must be a positive integer.');
-    } else if (arg === '--download-files') parsed.downloadFiles = true;
-    else if (arg === '--headed') parsed.headed = true;
-    else throw new Error(`Unknown option: ${arg}`);
-  }
-  return { command, options: parsed };
-}
-
-function requireValue(args, index, option) {
-  if (!args[index] || args[index].startsWith('--')) throw new Error(`${option} requires a value.`);
-  return args[index];
 }

@@ -9,10 +9,10 @@
   },
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/cli.js && node --test"
+    "check": "node scripts/check.mjs && node --test"
   },
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.13.0 <23 || >=24.0.0"
   },
   "dependencies": {
     "parse5": "^8.0.1",

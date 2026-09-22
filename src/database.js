@@ -1,19 +1,32 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { normaliseAvailability } from './api.js';
+import { migrateState, attachTracking } from './archive-state.js';
+import { safeMessage, fileMatches } from './io.js';
 
 export class ArchiveDatabase {
-  constructor(databasePath) {
-    fs.mkdirSync(path.dirname(databasePath), { recursive: true, mode: 0o700 });
+  constructor(databasePath, { readOnly = false } = {}) {
+    if (!readOnly) fs.mkdirSync(path.dirname(databasePath), { recursive: true, mode: 0o700 });
     this.path = databasePath;
-    this.db = new DatabaseSync(databasePath);
+    const existed = fs.existsSync(databasePath);
+    this.db = new DatabaseSync(databasePath, { readOnly });
+    if (readOnly) return;
+    if (existed && this.db.prepare('PRAGMA user_version').get().user_version < 2) {
+      const backup = `${databasePath}.pre-v2-${Date.now()}.bak`;
+      this.db.prepare('VACUUM INTO ?').run(backup); fs.chmodSync(backup, 0o600);
+      this.backupPath = backup;
+    }
     fs.chmodSync(databasePath, 0o600);
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;');
     this.migrate();
+    migrateState(this);
   }
 
   migrate() {
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS file_checks (run_id INTEGER NOT NULL,course_id TEXT NOT NULL,content_id TEXT NOT NULL,status TEXT NOT NULL,PRIMARY KEY(run_id,course_id,content_id));
+      CREATE TABLE IF NOT EXISTS text_extractions (sha256 TEXT NOT NULL,extractor_version TEXT NOT NULL,local_path TEXT,status TEXT NOT NULL,updated_at TEXT NOT NULL,error TEXT,PRIMARY KEY(sha256,extractor_version));
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS sync_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,10 +161,12 @@ export class ArchiveDatabase {
 
   startRun() {
     const result = this.db.prepare('INSERT INTO sync_runs(started_at, status) VALUES (?, ?)').run(new Date().toISOString(), 'running');
-    return Number(result.lastInsertRowid);
+    this.activeRunId = Number(result.lastInsertRowid);
+    return this.activeRunId;
   }
 
   finishRun(id, status, courseCount, error = null) {
+    this.activeRunId = null;
     this.db.prepare('UPDATE sync_runs SET finished_at=?, status=?, course_count=?, error=? WHERE id=?')
       .run(new Date().toISOString(), status, courseCount, error, id);
   }
@@ -167,7 +182,7 @@ export class ArchiveDatabase {
       course_code=excluded.course_code,name=excluded.name,term_id=excluded.term_id,term_name=excluded.term_name,
       available=excluded.available,synced_at=excluded.synced_at,json=excluded.json`)
       .run(course.id, course.courseId || course.externalId || course.id, course.name || '', course.termId || null,
-        termName || null, course.availability?.available === 'Yes' || course.effectiveAvailability?.available === 'Yes' ? 1 : 0,
+        termName || null, normaliseAvailability(course),
         now, JSON.stringify(course));
   }
 
@@ -242,7 +257,7 @@ export class ArchiveDatabase {
 
   recordSyncError(runId, courseId, section, error) {
     this.db.prepare('INSERT INTO sync_errors(run_id,course_id,section,occurred_at,error) VALUES (?,?,?,?,?)')
-      .run(runId || null, courseId || null, section, new Date().toISOString(), String(error?.message || error));
+      .run(runId || null, courseId || null, section, new Date().toISOString(), safeMessage(error));
   }
 
   upsertLocalFile(record) {
@@ -254,11 +269,8 @@ export class ArchiveDatabase {
   }
 
   findLocalFileByHash(sha256, courseCode = null) {
-    if (courseCode) {
-      const sameCourse = this.db.prepare('SELECT * FROM local_files WHERE sha256=? AND course_code=? ORDER BY path LIMIT 1').get(sha256, courseCode);
-      if (sameCourse) return sameCourse;
-    }
-    return this.db.prepare('SELECT * FROM local_files WHERE sha256=? ORDER BY path LIMIT 1').get(sha256) || null;
+    const rows = this.db.prepare('SELECT * FROM local_files WHERE sha256=? ORDER BY CASE WHEN course_code=? THEN 0 ELSE 1 END,path').all(sha256, courseCode);
+    return rows.find(row => fileMatches(row.path, sha256)) || null;
   }
 
   repointDownloadedFiles(sha256, localPath) {
@@ -272,6 +284,7 @@ export class ArchiveDatabase {
       byte_size=excluded.byte_size,synced_at=excluded.synced_at`)
       .run(record.courseId, record.contentId, record.title, record.sourceUrl, record.localPath || null,
         record.sha256 || null, record.byteSize ?? null, new Date().toISOString());
+    this.observe('files', record.courseId, record.contentId, { sha256: record.sha256, title: record.title, sourceUrl: record.sourceUrl }, { title: record.title });
   }
 
   status() {
@@ -294,3 +307,5 @@ function numericScore(item) {
   if (value == null || value === '') return null;
   return Number.isFinite(Number(value)) ? Number(value) : null;
 }
+
+attachTracking(ArchiveDatabase);

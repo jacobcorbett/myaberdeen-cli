@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { safeFilename } from './downloads.js';
+import { atomicWrite } from './io.js';
 
 const DATASETS = [
   ['content', 'content.json'],
@@ -12,8 +13,8 @@ const DATASETS = [
   ['discussion_posts', 'discussion-posts.json']
 ];
 
-export function exportArchive(database, config) {
-  const courses = database.db.prepare('SELECT * FROM courses ORDER BY term_name DESC, course_code').all();
+export function exportArchive(database, config, { courseIds } = {}) {
+  const courses = database.db.prepare('SELECT * FROM courses ORDER BY term_name DESC, course_code').all().filter(c => !courseIds || courseIds.includes(c.id));
   const index = [];
   for (const course of courses) {
     const courseDirectory = path.join(config.downloadDir, safeFilename(course.term_name || 'No term'), safeFilename(course.course_code || course.id));
@@ -22,13 +23,14 @@ export function exportArchive(database, config) {
     const counts = {};
     writeJson(path.join(dataDirectory, 'course.json'), JSON.parse(course.json));
     for (const [table, filename] of DATASETS) {
-      const rows = database.db.prepare(`SELECT json FROM ${table} WHERE course_id=? ORDER BY rowid`).all(course.id)
-        .map(row => JSON.parse(row.json));
+      const rows = database.db.prepare(`SELECT * FROM ${table} WHERE course_id=? ORDER BY rowid`).all(course.id)
+        .map(row => { const { last_seen_at, last_seen_run, detail_checked_at, ...provenance } = database.provenance(table, row); return { ...JSON.parse(row.json), _archive: provenance }; });
       counts[table] = rows.length;
       writeJson(path.join(dataDirectory, filename), rows);
     }
+    writeJson(path.join(dataDirectory, 'freshness.json'), { sections: database.sections(course.id), records: database.db.prepare('SELECT dataset,record_id,presence,last_seen_at,last_changed_at FROM record_state WHERE course_id=? ORDER BY dataset,record_id').all(course.id) });
     const files = database.db.prepare(`SELECT content_id,title,source_url,local_path,sha256,byte_size,synced_at
-      FROM files WHERE course_id=? ORDER BY title`).all(course.id);
+      FROM files WHERE course_id=? ORDER BY title`).all(course.id).map(row => ({ ...row, _archive: database.fileState(course.id, row.content_id) }));
     counts.files = files.length;
     writeJson(path.join(dataDirectory, 'files.json'), files);
     const relativeDirectory = path.relative(config.downloadDir, courseDirectory);
@@ -43,7 +45,13 @@ export function exportArchive(database, config) {
   }
   const archiveDirectory = path.join(config.downloadDir, '_archive');
   fs.mkdirSync(archiveDirectory, { recursive: true, mode: 0o700 });
-  writeJson(path.join(archiveDirectory, 'index.json'), {
+  const indexPath = path.join(archiveDirectory, 'index.json');
+  if (courseIds && fs.existsSync(indexPath)) {
+    const previous = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+    index.push(...(previous.courses || []).filter(c => !courseIds.includes(c.id)));
+    index.sort((a, b) => a.id.localeCompare(b.id));
+  }
+  writeJson(indexPath, {
     exportedAt: new Date().toISOString(),
     database: config.databasePath,
     courses: index
@@ -81,5 +89,5 @@ function writeJson(target, value) {
 }
 
 function writeText(target, value) {
-  fs.writeFileSync(target, value, { mode: 0o600 });
+  atomicWrite(target, value);
 }

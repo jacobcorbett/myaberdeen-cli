@@ -27,3 +27,13 @@ This is Jacob's local, terminal-native MyAberdeen archive client. It uses a dedi
 - Keep commits focused and reversible, using concise conventional commit subjects.
 - Run `npm run check` before publishing. Keep the GitHub repository private.
 - Inspect staged files for runtime data and secrets before each commit.
+
+## Archive-first workflow
+
+- Start ordinary course questions with `myab brief --active --json`, then `show` or the returned local sources. Check section freshness before presenting cached facts as current.
+- Use `myab check --active` for metadata, or `myab refresh --active` for metadata and conditional file checks. An explicit live request takes priority over the cache.
+- Configure `profiles.current` locally. Do not select every membership for a routine refresh; broad archive operations require explicit `--all`.
+- Preserve full archived details on incomplete refresh. Mark absence only after a successful complete section traversal.
+- Keep caller-specific change cursors. Text caches are keyed by file SHA-256 and extractor version.
+- Preview vault merge and relocation changes. Relocation must verify destination hashes and must never delete source files.
+- Test schema migration/backup, scope isolation, partial failures, conditional requests, and unchanged repeat runs. No university credentials or real course datasets belong in tests or CI.

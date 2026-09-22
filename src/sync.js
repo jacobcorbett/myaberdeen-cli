@@ -1,190 +1,223 @@
-import { getAllPages, getAccountOverview, courseCode, selectCourses } from './api.js';
+import { getAllPages, getAccountOverview, courseCode, selectCourses, normaliseAvailability } from './api.js';
 import { isBlackboardFile, downloadContentFile, embeddedFiles } from './downloads.js';
+import { AuthenticationRequiredError } from './browser.js';
+import { baseCourseCode } from './course-paths.js';
+import { fingerprint, throwIfAborted, safeMessage } from './io.js';
 
-export async function syncArchive({ session, database, config, courseQuery, limitCourses, limitFiles, downloadFiles = false, onProgress = () => {} }) {
+export async function syncArchive({ session, database, config, courseQuery, selectedIds, resumeFrom, limitCourses, limitFiles, downloadFiles = false, deep = false, signal, onProgress = () => {} }) {
   const runId = database.startRun();
-  let synced = 0;
+  const stats = { courses: 0, selected: 0, inaccessible: 0, downloaded: 0, notModified: 0, unchanged: 0, deferredFiles: 0 };
+  let courses = [];
   try {
     const { user, memberships, terms } = await getAccountOverview(session);
     database.setMeta('user_id', user.id);
-    database.setMeta('last_sync_started_at', new Date().toISOString());
     const termNames = new Map(terms.map(term => [term.id, term.name || term.id]));
-    let courses = selectCourses(memberships, courseQuery);
-    if (courseQuery && courses.length === 0) throw new Error(`No course matched “${courseQuery}”.`);
+    courses = selectCourses(memberships, selectedIds || courseQuery);
     if (limitCourses) courses = courses.slice(0, limitCourses);
-    const fileBudget = { remaining: limitFiles ?? Number.POSITIVE_INFINITY };
-
-    for (const membershipCourse of courses) {
+    stats.selected = courses.length;
+    database.setScope(runId, courses, { downloadFiles, deep, limitFiles: limitFiles || null });
+    onProgress(`Selected ${courses.length}: ${courses.map(c => `${courseCode(c)} — ${c.name || ''}`).join('; ')}`);
+    const budget = { remaining: limitFiles ?? Infinity };
+    for (const membership of courses) {
+      throwIfAborted(signal);
+      const before = errorCount(database, runId);
       let course;
-      try {
-        course = await session.getJson(`/learn/api/v1/courses/${encodeURIComponent(membershipCourse.id)}`);
-      } catch (error) {
-        database.recordSyncError(runId, membershipCourse.id, 'course', error);
-        onProgress(`Skipped inaccessible course ${courseCode(membershipCourse)}: ${error.message}`);
+      try { course = await session.getJson(`/learn/api/v1/courses/${encodeURIComponent(membership.id)}`); }
+      catch (error) {
+        fatal(error, signal);
+        database.upsertCourse(membership, termNames.get(membership.termId));
+        database.recordSyncError(runId, membership.id, 'course', error);
+        database.courseResult(runId, membership.id, 'inaccessible'); stats.inaccessible++;
+        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions']) database.finishSection(runId, membership.id, section, 'unavailable');
+        onProgress(`Could not access ${courseCode(membership)}: ${safeMessage(error)}`);
         continue;
       }
       const termName = termNames.get(course.termId) || null;
       database.upsertCourse(course, termName);
+      if (normaliseAvailability(course) === 0) {
+        database.recordSyncError(runId, course.id, 'course', new Error('Course is marked unavailable by Blackboard.'));
+        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions']) database.finishSection(runId, course.id, section, 'unavailable');
+        database.courseResult(runId, course.id, 'inaccessible'); stats.inaccessible++;
+        onProgress(`Unavailable: ${courseCode(course)} — ${course.name || ''}`); continue;
+      }
       onProgress(`Syncing ${courseCode(course)} — ${course.name || ''}`);
-
-      const content = await safeSection(database, runId, course.id, 'content', onProgress,
-        () => syncContentTree({ session, database, course, config, termName, downloadFiles, fileBudget, runId, onProgress }),
-        { items: 0, downloaded: 0, forums: [] });
-      await safeSection(database, runId, course.id, 'announcements', onProgress,
-        () => syncAnnouncements(session, database, course.id));
-      await safeSection(database, runId, course.id, 'grades', onProgress,
-        () => syncGrades(session, database, course.id, user.id));
-      await safeSection(database, runId, course.id, 'schedule', onProgress,
-        () => syncSchedule(session, database, course.id));
-      await safeSection(database, runId, course.id, 'messages', onProgress,
-        () => syncMessages(session, database, course.id));
-      await safeSection(database, runId, course.id, 'discussions', onProgress,
-        () => syncDiscussions(session, database, course.id, content.forums));
-      synced += 1;
-      onProgress(`  ${content.items} content items${downloadFiles ? `; ${content.downloaded} files downloaded` : ''}`);
+      const context = { session, database, config, course, termName, runId, deep, signal, onProgress };
+      const content = await section(context, 'content', () => syncContent(context), { forums: [] });
+      await section(context, 'announcements', async () => {
+        const items = await pages(context, `/announcements?sort=startDateRestriction(desc)`);
+        for (const item of items) database.upsertAnnouncement(course.id, item);
+      });
+      await section(context, 'grades', () => syncGrades(context, user.id));
+      await section(context, 'schedule', async () => {
+        const payload = await session.getJson(`/learn/api/v1/courses/${encodeURIComponent(course.id)}/schedule`);
+        const items = Array.isArray(payload) ? payload : payload?.results || payload?.items;
+        if (!Array.isArray(items)) throw new Error('Unexpected schedule response; completeness is unknown.');
+        items.forEach((item, index) => database.upsertSchedule(course.id, item, index));
+      });
+      await section(context, 'messages', () => syncMessages(context));
+      // If content discovery was partial, an empty forum list proves nothing about absences.
+      await section(context, 'discussions', () => syncDiscussions(context, content.forums), undefined,
+        database.sections(course.id).find(s => s.section === 'content')?.status !== 'completed');
+      const deferredBefore = stats.deferredFiles;
+      if (downloadFiles) await section(context, 'files', async () => {
+        const candidates = database.db.prepare('SELECT f.* FROM file_candidates f JOIN record_state r ON r.dataset=\'file_candidates\' AND r.course_id=f.course_id AND r.record_id=f.content_id WHERE f.course_id=? AND r.last_seen_run=?').all(course.id, runId);
+        const completed = new Set(resumeFrom ? database.db.prepare("SELECT content_id FROM file_checks WHERE run_id=? AND course_id=? AND status='completed'").all(resumeFrom, course.id).map(row => row.content_id) : []);
+        for (const candidate of candidates) {
+          throwIfAborted(signal);
+          const item = JSON.parse(candidate.json);
+          if (isVideo(item)) continue;
+          if (completed.has(item.id)) { database.db.prepare("INSERT OR REPLACE INTO file_checks VALUES(?,?,?,'completed')").run(runId, course.id, item.id); continue; }
+          if (budget.remaining <= 0) { stats.deferredFiles++; continue; }
+          budget.remaining--;
+          try {
+            const result = await downloadContentFile({ session, database, downloadRoot: config.downloadDir, course, termName, item, canonicalCourseCode: baseCourseCode(course.courseId || course.id, config) });
+            database.db.prepare("INSERT OR REPLACE INTO file_checks VALUES(?,?,?,'completed')").run(runId, course.id, item.id);
+            if (result.notModified) stats.notModified++;
+            else if (result.downloaded) stats.downloaded++;
+            else stats.unchanged++;
+          } catch (error) {
+            fatal(error, signal);
+            database.db.prepare("INSERT OR REPLACE INTO file_checks VALUES(?,?,?,'failed')").run(runId, course.id, item.id);
+            database.recordSyncError(runId, course.id, 'file-download', new Error(`${item.id}: ${safeMessage(error)}`));
+            onProgress(`Could not download ${item.title || item.id}: ${safeMessage(error)}`);
+          }
+        }
+        if (stats.deferredFiles > deferredBefore) database.finishSection(runId, course.id, 'files', 'limited');
+      });
+      stats.courses++;
+      const partial = errorCount(database, runId) > before || stats.deferredFiles > deferredBefore;
+      database.courseResult(runId, course.id, partial ? 'partial' : 'completed');
     }
-    database.setMeta('last_sync_finished_at', new Date().toISOString());
-    const errors = database.db.prepare('SELECT COUNT(*) AS count FROM sync_errors WHERE run_id=?').get(runId).count;
-    const status = errors ? 'partial' : 'completed';
-    database.finishRun(runId, status, synced);
-    return { courses: synced, errors, status };
+    const errors = errorCount(database, runId);
+    const status = errors ? 'partial' : stats.deferredFiles ? 'limited' : 'completed';
+    database.db.prepare('UPDATE sync_runs SET metrics_json=? WHERE id=?').run(JSON.stringify({ ...stats, ...session.stats }), runId);
+    database.finishRun(runId, status, stats.courses);
+    return { ...stats, runId, courseIds: courses.map(c => c.id), errors, status, network: session.stats || {} };
   } catch (error) {
-    database.finishRun(runId, 'failed', synced, error.message);
+    const status = signal?.aborted ? 'cancelled' : error instanceof AuthenticationRequiredError ? 'authentication-required' : 'failed';
+    database.finishRun(runId, status, stats.courses, safeMessage(error));
     throw error;
   }
 }
 
-async function syncContentTree({ session, database, course, config, termName, downloadFiles, fileBudget, runId, onProgress }) {
-  const seen = new Set();
-  const forums = new Map();
-  let downloaded = 0;
-  let itemCount = 0;
-  const queue = ['ROOT'];
+function fatal(error, signal) { throwIfAborted(signal); if (error instanceof AuthenticationRequiredError) throw error; }
+function errorCount(database, runId) { return database.db.prepare('SELECT COUNT(*) n FROM sync_errors WHERE run_id=?').get(runId).n; }
+function pages(ctx, suffix) { return getAllPages(ctx.session, `/learn/api/v1/courses/${encodeURIComponent(ctx.course.id)}${suffix}`, { signal: ctx.signal }); }
+async function section(ctx, name, operation, fallback, incomplete = false) {
+  const { database, runId, course, signal, onProgress } = ctx;
+  throwIfAborted(signal);
+  const before = errorCount(database, runId);
+  database.finishSection(runId, course.id, name, 'running');
+  try {
+    const value = await operation();
+    const limited = database.sections(course.id).find(s => s.section === name)?.status === 'limited';
+    database.finishSection(runId, course.id, name, errorCount(database, runId) > before || incomplete ? 'partial' : limited ? 'limited' : 'completed');
+    return value;
+  } catch (error) {
+    database.finishSection(runId, course.id, name, error instanceof AuthenticationRequiredError ? 'authentication-required' : signal?.aborted ? 'cancelled' : error.status === 403 ? 'unavailable' : 'partial');
+    fatal(error, signal);
+    database.recordSyncError(runId, course.id, name, error);
+    onProgress(`Could not archive ${name}: ${safeMessage(error)}`);
+    return fallback;
+  }
+}
+
+async function syncContent(ctx) {
+  const { session, database, course, config, runId, deep, signal } = ctx;
+  const seen = new Set(), parents = new Set(), forums = new Map(), queue = ['ROOT'];
+  const discover = item => {
+    const forum = item.contentDetail?.['resource/x-bb-forumlink'];
+    if (forum?.id) forums.set(forum.id, forum);
+    for (const file of [...(isBlackboardFile(item) ? [item] : []), ...embeddedFiles(item, config.baseUrl)]) database.discoverFile(course.id, item.id, file);
+  };
   while (queue.length) {
+    throwIfAborted(signal);
     const parentId = queue.shift();
-    const children = await getAllPages(session,
-      `/learn/api/v1/courses/${encodeURIComponent(course.id)}/contents/${encodeURIComponent(parentId)}/children?@view=Summary&expand=assignedGroups,selfEnrollmentGroups.group,gradebookCategory&includeInActivityTracking=true`,
-      { limit: 100 });
+    if (parents.has(parentId)) continue; parents.add(parentId);
+    let children;
+    try { children = await pages(ctx, `/contents/${encodeURIComponent(parentId)}/children?@view=Summary&expand=assignedGroups,selfEnrollmentGroups.group,gradebookCategory&includeInActivityTracking=false`); }
+    catch (error) { fatal(error, signal); database.recordSyncError(runId, course.id, 'content', new Error(`Folder ${parentId}: ${safeMessage(error)}`)); continue; }
     for (const summary of children) {
-      if (!summary?.id || seen.has(summary.id)) continue;
-      seen.add(summary.id);
-      let item = summary;
-      try {
-        item = await session.getJson(`/learn/api/v1/courses/${encodeURIComponent(course.id)}/contents/${encodeURIComponent(summary.id)}?expand=assignedGroups,selfEnrollmentGroups.group,gradebookCategory`);
-      } catch {
-        // The summary remains useful when Blackboard denies one optional detail endpoint.
-      }
-      database.upsertContent(course.id, parentId, item);
-      itemCount += 1;
-      const linkedDetailUrl = item.contentDetailUrl;
-      if (linkedDetailUrl && item.contentDetail?.['resource/x-bb-courselink']) {
+      throwIfAborted(signal);
+      if (!summary?.id) throw new Error('Content listing returned an item without an ID.');
+      if (seen.has(summary.id)) continue; seen.add(summary.id);
+      const previous = database.getContent(course.id, summary.id);
+      const priorSummary = database.getSummary(course.id, summary.id);
+      const fullCheckDue = !priorSummary?.detail_checked_at || Date.now() - Date.parse(priorSummary.detail_checked_at) > (config.deepCheckHours ?? 24) * 3_600_000;
+      const changed = fingerprint({ parentId, item: summary }) !== priorSummary?.fingerprint;
+      let item = previous || summary, complete = false;
+      if (deep || changed || !previous || priorSummary?.detail_status !== 'complete' || fullCheckDue) {
         try {
-          const linked = await session.getJson(linkedDetailUrl);
-          database.upsertContent(course.id, parentId, linked);
-          const forum = linked.contentDetail?.['resource/x-bb-forumlink'];
-          if (forum?.id) forums.set(forum.id, { id: forum.id, title: linked.title || item.title || '' });
+          item = await session.getJson(`/learn/api/v1/courses/${encodeURIComponent(course.id)}/contents/${encodeURIComponent(summary.id)}?expand=assignedGroups,selfEnrollmentGroups.group,gradebookCategory`);
+          if (item?.id !== summary.id) throw new Error('Content detail returned an unexpected ID.');
+          database.upsertContent(course.id, parentId, item); complete = true;
         } catch (error) {
-          database.recordSyncError(runId, course.id, 'linked-content', error);
+          fatal(error, signal);
+          database.recordSyncError(runId, course.id, 'content-detail', new Error(`${summary.id}: ${safeMessage(error)}`));
+          if (!previous) database.upsertContent(course.id, parentId, summary);
+          else database.observe('content', course.id, summary.id, previous, { unchanged: true });
         }
+        database.rememberSummary(course.id, parentId, summary, complete);
+      } else {
+        database.observe('content', course.id, item.id, item, { unchanged: true });
+        database.db.prepare('UPDATE content_summaries SET summary_checked_at=? WHERE course_id=? AND content_id=?').run(new Date().toISOString(), course.id, item.id);
       }
-      if (isContainer(item) || isContainer(summary)) queue.push(item.id);
-      for (const fileItem of downloadFiles ? [...(isBlackboardFile(item) ? [item] : []), ...embeddedFiles(item, config.baseUrl)] : []) {
-        if (fileBudget.remaining <= 0) break;
-        if (isVideo(fileItem)) continue;
-        fileBudget.remaining -= 1;
+      discover(item);
+      if (isContainer(item) || isContainer(summary)) queue.push(summary.id);
+      if (item.contentDetailUrl && item.contentDetail?.['resource/x-bb-courselink']) {
         try {
-          const result = await downloadContentFile({ session, database, downloadRoot: config.downloadDir, course, termName, item: fileItem });
-          if (result.downloaded) {
-            downloaded += 1;
-            onProgress(`  Downloaded ${fileItem.title || fileItem.name || fileItem.id}`);
-          }
-        } catch (error) {
-          database.recordSyncError(runId, course.id, 'file-download', error);
-          onProgress(`  Skipped file ${fileItem.title || fileItem.id}: ${error.message}`);
-        }
+          const linked = await session.getJson(item.contentDetailUrl);
+          if (!linked?.id) throw new Error('Linked content returned no ID.');
+          database.upsertContent(course.id, parentId, linked); discover(linked);
+          if (isContainer(linked)) queue.push(linked.id);
+        } catch (error) { fatal(error, signal); database.recordSyncError(runId, course.id, 'linked-content', error); }
       }
     }
   }
-  return { items: itemCount, downloaded, forums: [...forums.values()] };
+  return { forums: [...forums.values()] };
 }
-
 function isContainer(item) {
   if (item?.hasChildren) return true;
-  const handler = item?.contentHandler?.id || item?.contentHandler || item?.type || '';
-  return ['folder', 'lesson', 'module'].some(kind => String(handler).toLowerCase().includes(kind));
+  return /folder|lesson|module/i.test(String(item?.contentHandler?.id || item?.contentHandler || item?.type || ''));
 }
-
 function isVideo(item) {
   const file = item?.contentDetail?.['resource/x-bb-file']?.file || {};
-  const mimeType = String(file.mimeType || '').toLowerCase();
-  const title = String(file.fileName || item?.title || '').toLowerCase();
-  return mimeType.startsWith('video/') || /\.(mp4|m4v|mov|avi|mkv|webm|wmv)$/i.test(title);
+  return String(file.mimeType || '').startsWith('video/') || /\.(mp4|m4v|mov|avi|mkv|webm|wmv)$/i.test(file.fileName || item.title || '');
 }
-
-async function syncAnnouncements(session, database, courseId) {
-  const items = await getAllPages(session,
-    `/learn/api/v1/courses/${encodeURIComponent(courseId)}/announcements?sort=startDateRestriction(desc)`, { limit: 100 });
-  for (const item of items) database.upsertAnnouncement(courseId, item);
-}
-
-async function syncGrades(session, database, courseId, userId) {
-  const items = await getAllPages(session,
-    `/learn/api/v1/courses/${encodeURIComponent(courseId)}/gradebook/grades?userId=${encodeURIComponent(userId)}`, { limit: 100 });
+async function syncGrades(ctx, userId) {
+  const { database, course, session, runId, signal } = ctx;
   const columns = new Map();
-  for (const item of items) {
+  for (const item of await pages(ctx, `/gradebook/grades?userId=${encodeURIComponent(userId)}`)) {
     if (item.columnUrl) {
-      try {
-        let column = columns.get(item.columnUrl);
-        if (!column) {
-          column = await session.getJson(item.columnUrl);
-          columns.set(item.columnUrl, column);
-        }
-        item.gradebookColumn = column;
-      } catch {
-        // The score remains useful when an old course denies column metadata.
+      try { if (!columns.has(item.columnUrl)) columns.set(item.columnUrl, await session.getJson(item.columnUrl)); item.gradebookColumn = columns.get(item.columnUrl); }
+      catch (error) {
+        fatal(error, signal); database.recordSyncError(runId, course.id, 'grade-column', error);
+        const old = database.db.prepare('SELECT json FROM grades WHERE course_id=? AND id=?').get(course.id, item.id || item.columnId);
+        if (old) item.gradebookColumn = JSON.parse(old.json).gradebookColumn;
       }
     }
-    database.upsertGrade(courseId, item);
+    database.upsertGrade(course.id, item);
   }
 }
-
-async function syncSchedule(session, database, courseId) {
-  const payload = await session.getJson(`/learn/api/v1/courses/${encodeURIComponent(courseId)}/schedule`);
-  const items = Array.isArray(payload) ? payload : payload?.results || payload?.items || [];
-  items.forEach((item, index) => database.upsertSchedule(courseId, item, index));
-}
-
-async function syncMessages(session, database, courseId) {
-  const conversations = await getAllPages(session,
-    `/learn/api/v1/courses/${encodeURIComponent(courseId)}/conversations`, { limit: 100 });
-  for (const conversation of conversations) {
-    database.upsertConversation(courseId, conversation);
-    const messages = await getAllPages(session,
-      `/learn/api/v1/courses/${encodeURIComponent(courseId)}/conversations/${encodeURIComponent(conversation.id)}/messages`,
-      { limit: 100, maxItems: 50_000 });
-    for (const message of messages) database.upsertMessage(courseId, conversation.id, message);
+async function syncMessages(ctx) {
+  for (const conversation of await pages(ctx, '/conversations')) {
+    ctx.database.upsertConversation(ctx.course.id, conversation);
+    for (const message of await pages(ctx, `/conversations/${encodeURIComponent(conversation.id)}/messages`)) ctx.database.upsertMessage(ctx.course.id, conversation.id, message);
   }
 }
-
-async function syncDiscussions(session, database, courseId, forums) {
+async function syncDiscussions(ctx, forums) {
   for (const forum of forums || []) {
-    const base = `/learn/api/v1/courses/${encodeURIComponent(courseId)}/discussionboards/default/forums/${encodeURIComponent(forum.id)}/messages`;
-    const threads = await getAllPages(session, base, { limit: 100, maxItems: 50_000 });
-    for (const thread of threads) {
-      database.upsertDiscussionPost(courseId, forum.id, thread);
-      const replies = await getAllPages(session,
-        `${base}/${encodeURIComponent(thread.id)}/replies?sort=postDate(asc)`, { limit: 100, maxItems: 50_000 });
-      for (const reply of replies) database.upsertDiscussionPost(courseId, forum.id, reply);
+    const base = `/discussionboards/default/forums/${encodeURIComponent(forum.id)}/messages`;
+    const queue = await pages(ctx, base), seen = new Set();
+    while (queue.length) {
+      throwIfAborted(ctx.signal);
+      const post = queue.shift();
+      if (!post?.id) throw new Error('Discussion response contains a post without an ID.');
+      if (seen.has(post.id)) continue;
+      if (seen.size >= 50_000) throw new Error('Discussion traversal limit reached.');
+      seen.add(post.id); ctx.database.upsertDiscussionPost(ctx.course.id, forum.id, post);
+      const replies = await pages(ctx, `${base}/${encodeURIComponent(post.id)}/replies?sort=postDate(asc)`);
+      for (const reply of replies) if (!seen.has(reply.id)) queue.push(reply);
     }
-  }
-}
-
-async function safeSection(database, runId, courseId, section, onProgress, operation, fallback = undefined) {
-  try {
-    return await operation();
-  } catch (error) {
-    database.recordSyncError(runId, courseId, section, error);
-    onProgress(`  Could not archive ${section}: ${error.message}`);
-    return fallback;
   }
 }

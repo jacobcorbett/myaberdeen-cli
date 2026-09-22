@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { chromium, request as apiRequest } from 'playwright-core';
 import { prepareLocalState } from './config.js';
+import { safeMessage, throwIfAborted } from './io.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 export class AuthenticationRequiredError extends Error {
   constructor(message = 'The MyAberdeen session is not authenticated. Run: myab login') {
@@ -11,8 +13,11 @@ export class AuthenticationRequiredError extends Error {
 }
 
 export class BlackboardSession {
-  constructor(config, { headless = true } = {}) {
+  constructor(config, { headless = true, signal, retries = 2 } = {}) {
     this.config = config;
+    this.signal = signal;
+    this.retries = retries;
+    this.stats = { requests: 0, retries: 0, fileBytes: 0, notModified: 0 };
     this.headless = headless;
     this.context = null;
     this.browser = null;
@@ -21,6 +26,7 @@ export class BlackboardSession {
   }
 
   async open({ requireAuthentication = true } = {}) {
+    throwIfAborted(this.signal);
     prepareLocalState(this.config);
     if (!fs.existsSync(this.config.chromePath)) {
       throw new Error(`Google Chrome was not found at ${this.config.chromePath}`);
@@ -33,6 +39,10 @@ export class BlackboardSession {
       viewport: { width: 1280, height: 900 },
       args: ['--password-store=basic', '--use-mock-keychain', '--disable-sync', '--disable-background-networking', '--restore-last-session', '--new-window', '--start-maximized']
     });
+    // Cancellation may have finished cleanup while Chrome was still launching.
+    // Make the newly returned context eligible for the caller's final cleanup.
+    this.closing = null;
+    throwIfAborted(this.signal);
     this.context.on('request', request => this.captureXsrf(request));
     this.page = this.context.pages()[0] || await this.context.newPage();
     await this.page.goto(`${this.config.baseUrl}/ultra/course`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
@@ -43,33 +53,31 @@ export class BlackboardSession {
   }
 
   async openInteractive() {
+    throwIfAborted(this.signal);
     prepareLocalState(this.config);
     this.assertProfileAvailable();
     const portFile = `${this.config.profileDir}/DevToolsActivePort`;
     try { fs.unlinkSync(portFile); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (!fs.existsSync(this.config.chromePath)) throw new Error('Configured Google Chrome executable was not found. Run: myab doctor');
     await new Promise((resolve, reject) => {
-      const launcher = spawn('/usr/bin/open', [
-        '-na', 'Google Chrome', '--args',
-        `--user-data-dir=${this.config.profileDir}`,
-        '--remote-debugging-address=127.0.0.1',
-        '--remote-debugging-port=0',
-        '--no-first-run',
-        '--password-store=basic',
-        '--use-mock-keychain',
-        '--disable-sync',
-        '--new-window',
-        `${this.config.baseUrl}/ultra/course`
+      this.launcher = spawn(this.config.chromePath, [
+        `--user-data-dir=${this.config.profileDir}`, '--remote-debugging-address=127.0.0.1',
+        '--remote-debugging-port=0', '--no-first-run', '--password-store=basic', '--use-mock-keychain',
+        '--disable-sync', '--new-window', `${this.config.baseUrl}/ultra/course`
       ], { stdio: 'ignore' });
-      launcher.once('error', reject);
-      launcher.once('exit', code => code === 0 ? resolve() : reject(new Error(`Chrome launcher exited with ${code}`)));
+      this.launcher.once('error', () => reject(new Error('Could not launch the configured Google Chrome executable.')));
+      this.launcher.once('spawn', resolve);
     });
     const deadline = Date.now() + 30_000;
     while (!fs.existsSync(portFile) && Date.now() < deadline) {
+      throwIfAborted(this.signal);
       await new Promise(resolve => setTimeout(resolve, 200));
     }
     if (!fs.existsSync(portFile)) throw new Error('Chrome did not start its local debugging connection.');
     const port = fs.readFileSync(portFile, 'utf8').split(/\r?\n/)[0];
     this.browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+    this.closing = null;
+    throwIfAborted(this.signal);
     this.context = this.browser.contexts()[0];
     this.context.on('request', request => this.captureXsrf(request));
     this.page = this.context.pages().find(page => page.url().includes('abdn.blackboard.com'))
@@ -88,6 +96,7 @@ export class BlackboardSession {
   async waitForXsrf(timeoutMs = 15_000) {
     const deadline = Date.now() + timeoutMs;
     while (!this.xsrfToken && Date.now() < deadline) {
+      throwIfAborted(this.signal);
       await this.page.waitForTimeout(250);
     }
     return this.xsrfToken;
@@ -165,12 +174,27 @@ export class BlackboardSession {
       if (external && !this.fileRequest) this.fileRequest = await apiRequest.newContext();
       const client = external ? this.fileRequest : this.context.request;
       let response;
-      try {
-        response = await client.get(url, { ...options,
-          headers: external ? { Accept: '*/*' } : options.headers, maxRedirects: 0 });
-      } catch {
-        // Playwright errors can contain headers and signed query strings.
-        throw new Error(`Blackboard transport failed for ${new URL(url).origin}${new URL(url).pathname}`);
+      for (let attempt = 0; ; attempt++) {
+        throwIfAborted(this.signal);
+        const headers = external ? { Accept: '*/*' } : options.headers;
+        if (external) for (const name of ['If-None-Match', 'If-Modified-Since']) if (options.headers?.[name]) headers[name] = options.headers[name];
+        try {
+          this.stats.requests++;
+          response = await client.get(url, { ...options, headers, maxRedirects: 0, maxRetries: 0, signal: this.signal });
+        } catch {
+          throwIfAborted(this.signal);
+          if (attempt >= this.retries) throw new Error(`Blackboard transport failed for ${new URL(url).pathname}`);
+          this.stats.retries++;
+          await delay(500 * 2 ** attempt, undefined, { signal: this.signal });
+          continue;
+        }
+        if (![429, 500, 502, 503, 504].includes(response.status()) || attempt >= this.retries) break;
+        const retryAfter = response.headers()['retry-after'];
+        const seconds = Number(retryAfter);
+        const wait = retryAfter ? (Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - Date.now()) : 500 * 2 ** attempt;
+        await response.dispose();
+        this.stats.retries++;
+        await delay(Math.min(30_000, Math.max(0, Number.isFinite(wait) ? wait : 1000)), undefined, { signal: this.signal });
       }
       if (![301, 302, 303, 307, 308].includes(response.status())) return response;
       const location = response.headers().location;
@@ -197,23 +221,27 @@ export class BlackboardSession {
         if (allowAuthError) return null;
         throw new AuthenticationRequiredError();
       }
-      if (!response.ok()) throw new Error(`Blackboard request failed (${response.status()}) for ${new URL(url).pathname}`);
-      return await response.json();
+      if (!response.ok()) throw new HttpError(response.status(), new URL(url).pathname);
+      try { return await response.json(); } catch { throw new Error(`Invalid JSON from ${new URL(url).pathname}.`); }
     } finally { await response.dispose(); }
   }
 
-  async getBinary(route) {
+  async getBinary(route, { etag, lastModified } = {}) {
     const url = this.requestUrl(route);
     const response = await this.request(url, {
-      headers: { ...this.headers(), Accept: '*/*' },
+      headers: { ...this.headers(), Accept: '*/*', ...(etag ? { 'If-None-Match': etag } : lastModified ? { 'If-Modified-Since': lastModified } : {}) },
       timeout: 120_000,
       maxRedirects: 0
     }, { fileRedirects: true });
     try {
       if (response.status() === 401) throw new AuthenticationRequiredError();
-      if (!response.ok()) throw new Error(`Download failed (${response.status()}) for ${new URL(url).pathname}`);
+      const validators = { etag: response.headers().etag || null, lastModified: response.headers()['last-modified'] || null };
+      if (response.status() === 304) { this.stats.notModified++; return { notModified: true, ...validators }; }
+      if (!response.ok()) throw new HttpError(response.status(), new URL(url).pathname);
+      const body = Buffer.from(await response.body());
+      this.stats.fileBytes += body.length;
       return {
-        body: Buffer.from(await response.body()),
+        body, ...validators,
         contentType: response.headers()['content-type'] || '',
         disposition: response.headers()['content-disposition'] || '',
         finalUrl: response.url()
@@ -222,6 +250,11 @@ export class BlackboardSession {
   }
 
   async close() {
+    if (!this.closing) this.closing = this.closeResources();
+    return this.closing;
+  }
+
+  async closeResources() {
     if (this.fileRequest) await this.fileRequest.dispose();
     this.fileRequest = null;
     if (this.browser) {
@@ -234,15 +267,34 @@ export class BlackboardSession {
     }
     else if (this.context) await this.context.close();
     // Browser.close acknowledges before Chrome has released its profile on macOS.
-    const deadline = Date.now() + 10_000;
+    const deadline = Date.now() + (this.context || this.browser || this.launcher ? 10_000 : 0);
     while (Date.now() < deadline) {
       try { fs.lstatSync(`${this.config.profileDir}/SingletonLock`); }
       catch (error) { if (error.code === 'ENOENT') break; throw error; }
       await new Promise(resolve => setTimeout(resolve, 100));
     }
+    if (this.launcher && this.launcher.exitCode === null) this.launcher.kill('SIGTERM');
+    this.launcher = null;
     this.context = null;
     this.browser = null;
     this.page = null;
     this.xsrfToken = null;
   }
+}
+
+export class HttpError extends Error {
+  constructor(status, route) { super(`Blackboard request failed (${status}) for ${route}`); this.status = status; }
+}
+// Playwright navigation/launch diagnostics can contain SSO URLs and headers.
+for (const name of ['open', 'openInteractive', 'verifyAuthentication', 'ensureAuthentication']) {
+  const operation = BlackboardSession.prototype[name];
+  BlackboardSession.prototype[name] = async function (...args) {
+    try { return await operation.apply(this, args); }
+    catch (error) {
+      if (error instanceof AuthenticationRequiredError || error instanceof HttpError || this.signal?.aborted) throw error;
+      const message = safeMessage(error);
+      if (message === error.message) throw error;
+      throw new Error(message);
+    }
+  };
 }

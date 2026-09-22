@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { parseFragment } from 'parse5';
+import { atomicWrite, fileMatches } from './io.js';
 
 export function safeFilename(value, fallback = 'untitled') {
   const cleaned = String(value || fallback)
@@ -10,7 +11,9 @@ export function safeFilename(value, fallback = 'untitled') {
     .replace(/\s+/g, ' ')
     .replace(/^[. -]+|[. ]+$/g, '')
     .slice(0, 180);
-  return cleaned || fallback;
+  let bounded = cleaned;
+  while (Buffer.byteLength(bounded) > 180) bounded = bounded.slice(0, -1);
+  return bounded || 'untitled';
 }
 
 export function isBlackboardFile(item) {
@@ -54,50 +57,49 @@ export function embeddedFiles(item, baseUrl) {
   return [...found.values()];
 }
 
-export async function downloadContentFile({ session, database, downloadRoot, course, termName, item }) {
+export async function downloadContentFile({ session, database, downloadRoot, course, termName, item, canonicalCourseCode }) {
   const fileMetadata = item?.contentDetail?.['resource/x-bb-file']?.file || {};
   const sourceUrl = sourceRoute(course.id, item);
-  const result = await session.getBinary(sourceUrl);
-  if (/text\/html/i.test(result.contentType)) {
-    throw new Error('Blackboard returned an HTML viewer rather than a file; previous file record preserved.');
+  const previous = database.getFile?.(course.id, item.id);
+  const verified = previous?.source_url === sourceUrl && fileMatches(previous.local_path, previous.sha256);
+  let result = await session.getBinary(sourceUrl, verified ? { etag: previous.etag, lastModified: previous.last_modified } : {});
+  if (result.notModified) {
+    // A validator is trusted only after a full download established this file/validator pair.
+    if (!verified || !fileMatches(previous.local_path, previous.sha256)) result = await session.getBinary(sourceUrl);
+    else {
+      database.setFileValidators?.(course.id, item.id, { etag: result.etag || previous.etag, lastModified: result.lastModified || previous.last_modified });
+      return { downloaded: false, unchanged: true, notModified: true, path: previous.local_path, bytes: 0 };
+    }
   }
-
+  if (result.notModified || !Buffer.isBuffer(result.body)) throw new Error('Download returned no usable file body.');
+  if (/text\/html/i.test(result.contentType)) throw new Error('Blackboard returned an HTML viewer rather than a file; previous file record preserved.');
   const filename = safeFilename(filenameFromDisposition(result.disposition) || fileMetadata.fileName || item.title || item.name || item.id);
   const incomingHash = sha256(result.body);
-  const canonical = database.findLocalFileByHash(incomingHash, baseCourseCode(course.courseId || course.externalId || course.id));
-  if (canonical?.path) {
-    try {
-      if (sha256(await fs.readFile(canonical.path)) !== incomingHash) throw new Error('Stale file hash');
-      database.upsertFile({ courseId: course.id, contentId: item.id, title: filename, sourceUrl, localPath: canonical.path, sha256: incomingHash, byteSize: result.body.length });
-      return { downloaded: false, unchanged: true, deduplicated: true, path: canonical.path };
-    } catch {
-      // A stale catalogue entry should not prevent a fresh download.
-    }
+  const record = target => {
+    database.upsertFile({ courseId: course.id, contentId: item.id, title: filename, sourceUrl, localPath: target, sha256: incomingHash, byteSize: result.body.length });
+    database.setFileValidators?.(course.id, item.id, result);
+  };
+  const canonical = database.findLocalFileByHash(incomingHash, canonicalCourseCode || baseCourseCode(course.courseId || course.externalId || course.id));
+  if (canonical?.path && fileMatches(canonical.path, incomingHash)) {
+    record(canonical.path);
+    return { downloaded: false, unchanged: true, deduplicated: true, path: canonical.path, bytes: result.body.length };
   }
   const directory = path.join(downloadRoot, safeFilename(termName || 'No term'), safeFilename(course.courseId || course.externalId || course.id));
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
   let target = path.join(directory, filename);
   try {
-    const existing = await fs.readFile(target);
-    const existingHash = sha256(existing);
-    if (existingHash === incomingHash) {
-      database.upsertFile({ courseId: course.id, contentId: item.id, title: filename, sourceUrl, localPath: target, sha256: incomingHash, byteSize: result.body.length });
-      return { downloaded: false, unchanged: true, path: target };
+    if (sha256(await fs.readFile(target)) !== incomingHash) {
+      const extension = path.extname(filename);
+      target = path.join(directory, `${path.basename(filename, extension)}-${incomingHash}${extension}`);
     }
-    const extension = path.extname(filename);
-    target = path.join(directory, `${path.basename(filename, extension)}-${incomingHash}${extension}`);
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-  await fs.writeFile(target, result.body, { mode: 0o600 });
-  const hash = sha256(result.body);
-  database.upsertFile({ courseId: course.id, contentId: item.id, title: filename, sourceUrl, localPath: target, sha256: hash, byteSize: result.body.length });
-  return { downloaded: true, path: target, bytes: result.body.length };
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const written = atomicWrite(target, result.body);
+  record(target);
+  return { downloaded: written, unchanged: !written, path: target, bytes: result.body.length };
 }
 
 function baseCourseCode(value) {
   const text = String(value || '');
-  if (text.startsWith('MGD_CS3026')) return 'CS3026';
   return text.match(/^([A-Z]{2}(?:\d{4}|\d{3}[A-Z]))_\d{2}$/)?.[1] || text;
 }
 

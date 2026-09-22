@@ -20,7 +20,7 @@ test('mergeVault prefers and preserves an exact curated vault file', () => {
   database.upsertCourse({id:'_1_1',courseId:'CS1000_24',name:'CS1000 (2023-24): Test Course',termId:'_t_1'},'Term 1, 2023-24');
   const sha=crypto.createHash('sha256').update('same bytes').digest('hex');
   database.upsertFile({courseId:'_1_1',contentId:'_c_1',title:'slides.pdf',sourceUrl:'/file',localPath:raw,sha256:sha,byteSize:10});
-  const result=mergeVault(database,{vaultRoot:vault,downloadDir:downloads,databasePath});
+  const result=mergeVault(database,{vaultRoot:vault,downloadDir:downloads,databasePath,academicStartYear:2023});
   assert.equal(result.removedFiles,1); assert.equal(fs.existsSync(raw),false); assert.equal(fs.existsSync(curated),true);
   assert.equal(database.db.prepare('select local_path from files').get().local_path,curated);
   assert.equal(fs.existsSync(path.join(courseDir,'MyAberdeen','Index.md')),true);
@@ -40,7 +40,7 @@ test('mergeVault preserves personal Markdown in a previous resource directory', 
   const db = new ArchiveDatabase(databasePath);
   try {
     db.upsertCourse({ id: 'course', courseId: 'CS1000_27', name: 'Course' }, 'Term 1, 2026-27');
-    mergeVault(db, { vaultRoot, downloadDir, databasePath });
+    mergeVault(db, { vaultRoot, downloadDir, databasePath, academicStartYear: 2023 });
     assert.equal(fs.readFileSync(note, 'utf8'), 'My own notes');
     assert.equal(fs.existsSync(path.join(vaultRoot, 'Uni', 'Year 4', 'Courses', 'CS1000 - Course', 'MyAberdeen', 'Index.md')), true);
   } finally { db.close(); fs.rmSync(root, { recursive: true, force: true }); }
