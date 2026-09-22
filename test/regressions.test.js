@@ -64,9 +64,11 @@ test('downloads preserve previous versions and reject HTML without losing a good
 
 test('failed embedded downloads consume the budget and produce a partial run', async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'myab-sync-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const database = new ArchiveDatabase(path.join(dir, 'test.sqlite'));
-  t.after(() => database.close());
+  t.after(async () => {
+    database.close();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
   let attempts = 0;
   const document = { id: 'doc', body: { rawText: anchor('/bbcswebdav/one') + anchor('/bbcswebdav/two') } };
   const session = {
