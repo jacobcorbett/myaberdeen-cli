@@ -22,3 +22,6 @@ _archive/
 text-cache/
 operation.lock/
 operation.lock.recovery/
+
+# Portable release outputs (source-only staging).
+dist/

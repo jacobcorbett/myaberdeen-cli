@@ -2,7 +2,28 @@
 
 A private, read-only terminal client for the University of Aberdeen's Blackboard Learn site. It reuses a dedicated Chrome profile after interactive sign-in, archives course data in SQLite, and keeps ordinary Blackboard files locally. Normal lookups can use the archive without opening Chrome.
 
-## Install and sign in
+## Download a portable release
+
+Download the archive for your computer from [GitHub Releases](https://github.com/jacobcorbett/myaberdeen-cli/releases/latest). Access is required while this repository is private.
+
+| Computer | Asset suffix | Command after extracting |
+| --- | --- | --- |
+| Mac with Apple Silicon | `macos-arm64.tar.gz` | `./myab help` |
+| Intel Mac | `macos-x64.tar.gz` | `./myab help` |
+| Linux x64 | `linux-x64.tar.gz` | `./myab help` |
+| Windows x64 | `windows-x64.zip` | `.\myab.cmd help` |
+
+These are portable folders containing a launcher, the official Node runtime, and locked production dependencies. **No separate Node or npm installation is needed.** Extract the whole archive and keep `lib/` beside the launcher. Run it from a terminal; this is a CLI, not a desktop app. Add the extracted folder to `PATH` to use `myab` elsewhere. Do not move or symlink just the launcher.
+
+Google Chrome is still required. Start with `myab login`, complete sign-in/MFA yourself, then run `myab doctor --live`. Follow the course configuration section below; the example configuration and AI skill are under `lib/app/`. Optional text extractors still need to be installed separately.
+
+Each archive has a `.sha256` checksum. On macOS use `shasum -a 256 -c ARCHIVE.sha256`; on Linux use `sha256sum -c ARCHIVE.sha256`. On Windows compare `Get-FileHash ARCHIVE.zip -Algorithm SHA256` with the supplied checksum. `BUILD.json` records the version, source commit, runtime and architecture.
+
+Bundles are currently unsigned and not notarised, so OS security prompts may appear. Native release checks cover the platforms above; they do not verify every OS version or university login. Windows uses inherited filesystem ACLs: keep private state in your own user directory.
+
+To update a portable installation, download and verify the new matching archive, extract it into a new folder, run its `help` and `doctor`, then point `PATH` at that folder. Keep state/configuration outside the bundle; your existing archive and login profile are reused. Refresh any copied AI skill from the new `lib/app/skills/myaberdeen-cli/` directory. A link into an older bundle must also be repointed. Do not run Git/npm update commands inside a release bundle.
+
+## Install from source and sign in
 
 Use Node **22.13+ on the 22 branch, or Node 24+**, and an installed Google Chrome. Node 23 is not supported. Runtime code uses `node:sqlite`; no extra browser is downloaded.
 
@@ -29,7 +50,7 @@ Example request:
 
 > Read `skills/myaberdeen-cli/SKILL.md`, install this CLI, help me sign in, and configure only the courses I select. When I ask for an update, check GitHub, preserve my local state and changes, update the CLI and skill, and verify the installed revision.
 
-The repository currently requires GitHub access. There is no published npm package or built-in self-updater. For updates, first inspect `git status`, verify `origin`, run `git fetch origin`, and review incoming changes. On a clean `main` checkout that can fast-forward, run these commands in order, stopping if any fails:
+The repository currently requires GitHub access. There is no published npm package or built-in self-updater. The following updates a **source checkout**; portable downloads use the replacement procedure above. For source updates, first inspect `git status`, verify `origin`, run `git fetch origin`, and review incoming changes. On a clean `main` checkout that can fast-forward, run these commands in order, stopping if any fails:
 
 ```sh
 git merge --ff-only origin/main
@@ -139,3 +160,26 @@ npm run check
 ```
 
 Tests use synthetic data, temporary directories and mocked endpoints. CI needs no university credentials. Blackboard's internal endpoints can change; a successful local test suite does not replace a small live smoke check. Grades/schedules do not guarantee a complete assessment calendar.
+
+## Build portable downloads yourself
+
+From a source checkout with the supported Node version installed:
+
+```sh
+npm ci
+npm run check
+npm run build:release
+npm run smoke:release
+```
+
+The build targets the current OS/CPU and downloads the matching official Node distribution for the running Node version, verifying its published SHA-256. Internet access, npm and `tar` (macOS/Linux) or PowerShell (Windows) are required. Outputs go to ignored `dist/`. An explicit source allowlist excludes local profiles, archives and configuration; dependency and Node licence files are included. The smoke check extracts the archive into a temporary path containing spaces and exercises the actual launcher, bundled dependencies and SQLite with synthetic data, without university credentials.
+
+## Making releases
+
+1. Update `package.json` and `package-lock.json` to the same version and commit the changes.
+2. Run the **Release** workflow manually against the branch with **publish disabled** to check every platform before tagging.
+3. Push a matching stable tag, for example `git tag v0.2.0` then `git push origin v0.2.0`.
+
+The Release workflow runs tests, builds and smoke-checks each archive on its native platform, and publishes the release with all downloads/checksums only when every build succeeds. Publishing a release through GitHub's UI also triggers builds; assets appear after successful checks. Manual publishing requires an existing `vX.Y.Z` tag matching the package version. GitHub's source archives and the normal source-install route remain available.
+
+Release jobs use Node 24. Platform checks run on macOS ARM64, macOS Intel, Linux x64 and Windows x64. Live authentication is deliberately excluded from CI. A rerun can replace assets for the same tag; `BUILD.json` records the exact runtime and commit used.

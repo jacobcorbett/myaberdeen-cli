@@ -1,0 +1,84 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or existing version tag to build
+        default: main
+        required: true
+        type: string
+      publish:
+        description: Publish downloads (requires a stable version tag)
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.ref || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            label: macos-arm64
+          - os: macos-15-intel
+            label: macos-x64
+          - os: ubuntu-22.04
+            label: linux-x64
+          - os: windows-latest
+            label: windows-x64
+    runs-on: ${{ matrix.os }}
+    env:
+      BUILD_REF: ${{ github.event.release.tag_name || inputs.ref || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run build:release
+        env:
+          RELEASE_TAG: ${{ startsWith(env.BUILD_REF, 'v') && env.BUILD_REF || '' }}
+      - run: npm run smoke:release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: myab-${{ matrix.label }}
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.ref || github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: myab-*
+          merge-multiple: true
+          path: dist
+      - name: Publish verified downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected a stable vX.Y.Z tag'; exit 1; }
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* --verify-tag --title "MyAberdeen CLI $RELEASE_TAG" --generate-notes
+          fi

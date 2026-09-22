@@ -44,3 +44,11 @@ This is Jacob's local, terminal-native MyAberdeen archive client. It uses a dedi
 - Keep caller-specific change cursors. Text caches are keyed by file SHA-256 and extractor version.
 - Preview vault merge and relocation changes. Relocation must verify destination hashes and must never delete source files.
 - Test schema migration/backup, scope isolation, partial failures, conditional requests, and unchanged repeat runs. No university credentials or real course datasets belong in tests or CI.
+
+## Release packaging
+
+- Keep source installation supported alongside portable releases.
+- Release builds must use an explicit source allowlist and include dependency/runtime licences. Never package local state or real course data.
+- Run the extracted-bundle smoke check; importing source files alone does not validate a release.
+- Use native platform runners, verify downloaded runtime checksums, and publish only after all release jobs pass.
+- Keep the operator skill and README aligned with both source and portable update paths.

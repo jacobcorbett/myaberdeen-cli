@@ -16,7 +16,8 @@ test('exportArchive creates private per-course datasets', () => {
   const announcements = path.join(root, 'downloads', 'Term 1', 'CS1000', '_course-data', 'announcements.json');
   assert.equal(result.courses, 1);
   assert.equal(JSON.parse(fs.readFileSync(announcements, 'utf8'))[0].title, 'Welcome');
-  assert.equal(fs.statSync(announcements).mode & 0o777, 0o600);
+  // Windows uses inherited ACLs rather than POSIX owner/group/other mode bits.
+  if (process.platform !== 'win32') assert.equal(fs.statSync(announcements).mode & 0o777, 0o600);
   database.close();
   fs.rmSync(root, { recursive: true, force: true });
 });

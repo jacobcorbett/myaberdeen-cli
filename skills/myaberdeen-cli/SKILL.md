@@ -7,7 +7,15 @@ description: Install, update and use the MyAberdeen CLI to read University of Ab
 
 Use `myab` for read-only Blackboard access and a local SQLite/file archive. University sign-in and MFA belong to the user. The CLI cannot submit work, send messages or change enrolment. Local refreshes and exports do write archive data.
 
-## Locate or install
+## Portable releases
+
+For users who want a download without installing Node/npm, use the matching asset from https://github.com/jacobcorbett/myaberdeen-cli/releases/latest: `macos-arm64`, `macos-x64`, `linux-x64` or `windows-x64`. Verify the adjacent SHA-256, extract the entire folder, and run `./myab` (macOS/Linux) or `.\myab.cmd` (Windows). Keep `lib/` beside the launcher; add the bundle directory to PATH rather than linking only the launcher. Chrome is still required; optional extractors are separate.
+
+The bundle contains `BUILD.json`, `lib/app/README.md`, `lib/app/config.example.json` and this skill under `lib/app/skills/myaberdeen-cli/`. Follow sign-in, configuration and scoped-operation guidance below. Node/npm/Git are only needed for the source route. Bundles are unsigned/not notarised; Windows state relies on inherited user-directory ACLs.
+
+For a portable update, download and verify the new matching archive, extract it separately, check the new launcher with `help` and `doctor`, and update PATH. Preserve external private state. Refresh copied skills or repoint links into the new bundle. Do not apply the Git update procedure to an extracted bundle. Report its `BUILD.json` version and revision.
+
+## Locate or install from source
 
 Canonical source: https://github.com/jacobcorbett/myaberdeen-cli (access is required while the repository is private).
 
@@ -55,7 +63,7 @@ For incremental monitoring, use `myab changes --active --since CURSOR --json`. E
 - `relocate-files --course CODE --from OLD --to NEW` previews catalogue changes. `--apply` verifies destination hashes and updates paths; it does not move or delete source files.
 - Keep profiles, cookies, authentication state, databases/backups, grades, messages, downloaded files and extracted text out of commits, shared logs and source-only handoffs. External LTI/video links remain links.
 
-## Update from GitHub
+## Update a source checkout from GitHub
 
 When asked to update, or when checking whether an installed CLI is outdated, work in its existing checkout. Software updates and course refreshes are separate operations. There is no built-in `myab update` command or background self-updater.
 

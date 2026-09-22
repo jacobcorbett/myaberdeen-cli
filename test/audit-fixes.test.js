@@ -275,7 +275,9 @@ test('legacy migration creates a private consistent backup and repairs availabil
   old.prepare('INSERT INTO courses VALUES(?,?,?,?,?,?,?,?)').run('old', 'CS1000', 'Course', null, null, 0, '2020-01-01', JSON.stringify({ id: 'old', isAvailable: true })); old.close();
   const migrated = new ArchiveDatabase(target);
   try {
-    assert.ok(migrated.backupPath); assert.equal(fs.statSync(migrated.backupPath).mode & 0o777, 0o600);
+    assert.ok(migrated.backupPath);
+    // Windows uses inherited ACLs rather than POSIX owner/group/other mode bits.
+    if (process.platform !== 'win32') assert.equal(fs.statSync(migrated.backupPath).mode & 0o777, 0o600);
     assert.equal(migrated.db.prepare('SELECT available FROM courses').get().available, 1);
     const previous = new DatabaseSync(migrated.backupPath, { readOnly: true }); assert.equal(previous.prepare('SELECT available FROM courses').get().available, 0); previous.close();
   } finally { migrated.close(); }

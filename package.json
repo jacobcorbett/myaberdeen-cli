@@ -1,6 +1,6 @@
 {
   "name": "myaberdeen-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Terminal-native, read-only MyAberdeen archive client",
   "type": "module",
@@ -9,7 +9,9 @@
   },
   "scripts": {
     "test": "node --test",
-    "check": "node scripts/check.mjs && node --test"
+    "check": "node scripts/check.mjs && node --test",
+    "build:release": "node scripts/build-release.mjs",
+    "smoke:release": "node scripts/smoke-release.mjs"
   },
   "engines": {
     "node": ">=22.13.0 <23 || >=24.0.0"
