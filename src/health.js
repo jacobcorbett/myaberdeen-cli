@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileMatches } from './io.js';
+import { getRecordings, searchRecordings, hasPanopto } from './panopto-data.js';
 
 export function brief(database, config, courseIds) {
   const courses = database.db.prepare('SELECT * FROM courses ORDER BY course_code').all().filter(c => !courseIds || courseIds.includes(c.id));
@@ -13,6 +14,7 @@ export function brief(database, config, courseIds) {
       const states = database.db.prepare('SELECT dataset,presence,COUNT(*) count FROM record_state WHERE course_id=? GROUP BY dataset,presence').all(course.id);
       return { id: course.id, code: course.course_code, name: course.name, available: course.available, courseCheckedAt: course.synced_at,
         stale: !sections.length || sections.some(s => s.status !== 'completed' || Date.now() - Date.parse(s.checked_at) > (config.freshnessMinutes ?? 60) * 60_000),
+        recordings: searchRecordings(getRecordings(database, [course.id])),
         sections, counts: states, extractedText: extractions, lastTextExtractionAt: extractions.map(x => x.updated_at).sort().at(-1) || null, filesCheckedAt: sections.find(s => s.section === 'files')?.checked_at || null,
         files: files.map(f => ({ id: f.content_id, title: f.title, presence: database.fileState(course.id, f.content_id).presence, path: f.local_path, exists: !!f.local_path && fs.existsSync(f.local_path) })),
         recentChanges: database.changes({ courseIds: [course.id], since: Math.max(0, cursor - 100), limit: 20 }) };
@@ -20,6 +22,7 @@ export function brief(database, config, courseIds) {
 }
 export function verifyFiles(database, { courseIds } = {}) {
   const rows = database.db.prepare('SELECT * FROM files').all().filter(r => !courseIds || courseIds.includes(r.course_id));
+  if (hasPanopto(database)) rows.push(...database.db.prepare('SELECT course_id,recording_id AS content_id,local_path,sha256 FROM recording_assets').all().filter(r => !courseIds || courseIds.includes(r.course_id)));
   const checks = new Map(), issues = [];
   let verified = 0;
   for (const row of rows) {

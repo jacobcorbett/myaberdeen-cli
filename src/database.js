@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { normaliseAvailability } from './api.js';
 import { migrateState, attachTracking } from './archive-state.js';
 import { safeMessage, fileMatches } from './io.js';
+import { migratePanopto } from './panopto-data.js';
 
 export class ArchiveDatabase {
   constructor(databasePath, { readOnly = false } = {}) {
@@ -12,8 +13,9 @@ export class ArchiveDatabase {
     const existed = fs.existsSync(databasePath);
     this.db = new DatabaseSync(databasePath, { readOnly });
     if (readOnly) return;
-    if (existed && this.db.prepare('PRAGMA user_version').get().user_version < 2) {
-      const backup = `${databasePath}.pre-v2-${Date.now()}.bak`;
+    if (existed && this.db.prepare('PRAGMA user_version').get().user_version < 3) {
+      const version = this.db.prepare('PRAGMA user_version').get().user_version < 2 ? 2 : 3;
+      const backup = `${databasePath}.pre-v${version}-${Date.now()}.bak`;
       this.db.prepare('VACUUM INTO ?').run(backup); fs.chmodSync(backup, 0o600);
       this.backupPath = backup;
     }
@@ -21,6 +23,7 @@ export class ArchiveDatabase {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;');
     this.migrate();
     migrateState(this);
+    migratePanopto(this);
   }
 
   migrate() {

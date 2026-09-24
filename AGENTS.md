@@ -17,7 +17,7 @@ This is Jacob's local, terminal-native MyAberdeen archive client. It uses a dedi
 - Never print, log, commit, or persist cookies, SSO credentials, XSRF tokens, or request headers containing secrets.
 - Keep the browser profile and database outside the repository, in the user's local application-data directory with private permissions.
 - Be conservative with request concurrency and retries. This is a personal archive utility, not a crawler.
-- External LTI services such as Panopto and Turnitin are separate systems. Record their links; do not attempt to bypass their authentication or protections.
+- External LTI services are separate systems. Panopto reads use the normal user browser sign-in and course-scoped commands; other services such as Turnitin remain links. Never bypass authentication, folder permissions or download controls.
 
 ## Workflow
 

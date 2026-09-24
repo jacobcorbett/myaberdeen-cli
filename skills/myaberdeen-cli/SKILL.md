@@ -61,7 +61,7 @@ For incremental monitoring, use `myab changes --active --since CURSOR --json`. E
 - If an older archive needs migration, read the current README and use `myab repair`; the first writable legacy open makes a private database backup.
 - Preview `merge-vault --course CODE --dry-run` before applying it. Merge writes generated notes and may remove hash-identical raw duplicates; `--keep-duplicates` retains them. Do not infer permission to merge from a course lookup.
 - `relocate-files --course CODE --from OLD --to NEW` previews catalogue changes. `--apply` verifies destination hashes and updates paths; it does not move or delete source files.
-- Keep profiles, cookies, authentication state, databases/backups, grades, messages, downloaded files and extracted text out of commits, shared logs and source-only handoffs. External LTI/video links remain links.
+- Keep profiles, cookies, authentication state, databases/backups, grades, messages, downloaded files and extracted text out of commits, shared logs and source-only handoffs. Other external LTI/video links remain links; Panopto has the explicit read-only commands below.
 
 ## Update a source checkout from GitHub
 
@@ -92,3 +92,13 @@ git rev-parse HEAD
 If any step fails, stop and report it; do not continue to relink after failed checks. If using the direct Node entrypoint, omit `npm link` and verify that entrypoint instead. Keep private state/configuration outside the checkout and preserve it across updates. A local check does not establish live authentication: use `myab doctor --live` only when live verification is needed.
 
 Re-read this skill and the README after updating. If the agent uses a copied skill, refresh that copy from `skills/myaberdeen-cli/` in the updated checkout, preserving any intentional local customisations. A link to this directory follows checkout updates automatically. Report the installed commit and verification outcome; package version alone may not distinguish revisions.
+
+## Panopto (v0.3.0)
+
+Use `panopto-login` for the normal browser sign-in/MFA flow. Use `panopto-sync --course CODE` (or `--active`) after refreshing Blackboard metadata, or add `--panopto` to `check`, `sync` or `refresh`. Panopto sync uses the existing Chrome profile and website read requests, not OAuth credentials. Keep course scope explicit. `--limit-recordings N` bounds recording attempts, including failures.
+
+Read offline with `recordings --course CODE [--search TEXT]`, `recording --course CODE --id UUID`, and `transcript --course CODE --id UUID [--language ID] [--format text|json|srt|vtt]`. Exports contain timed transcripts, AI chapters/summary/key points and recording metadata. Treat generated captions and summaries as fallible source material.
+
+Report discovery coverage accurately. `course-links-and-search` is not a complete folder inventory; a viewer may be denied folder enumeration while individual links work. Do not infer no recordings from hidden folders. `--folder UUID` maps one selected course for that invocation; persistent `panoptoFolders` mappings are local arrays keyed by course ID/code. Folder enumeration stays within explicit mappings and exposed subfolders. Failed/limited refreshes retain old data.
+
+Media is opt-in: `panopto-download --course CODE --id UUID --dry-run`, then the same command without `--dry-run` when a download is requested. Only use exposed permitted podcast downloads. The server may still deny one; never fall back to player stream extraction. The maximum is 2 GiB by default (`--max-bytes`). Keep media local and verify via `verify-files`. Do not download all course videos just because metadata/transcript support was requested. Audio-only downloads and remote writes are not implemented.

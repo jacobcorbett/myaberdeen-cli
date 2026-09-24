@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { safeFilename } from './downloads.js';
 import { atomicWrite } from './io.js';
+import { exportRecordings } from './panopto-data.js';
 
 const DATASETS = [
   ['content', 'content.json'],
@@ -33,6 +34,9 @@ export function exportArchive(database, config, { courseIds } = {}) {
       FROM files WHERE course_id=? ORDER BY title`).all(course.id).map(row => ({ ...row, _archive: database.fileState(course.id, row.content_id) }));
     counts.files = files.length;
     writeJson(path.join(dataDirectory, 'files.json'), files);
+    const recordings = exportRecordings(database, course.id, courseDirectory);
+    counts.recordings = recordings.length;
+    writeJson(path.join(dataDirectory, 'recordings.json'), recordings);
     const relativeDirectory = path.relative(config.downloadDir, courseDirectory);
     index.push({
       id: course.id,

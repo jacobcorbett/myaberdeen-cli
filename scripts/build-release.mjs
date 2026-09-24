@@ -62,7 +62,8 @@ try {
     await fs.writeFile(path.join(bundle, 'myab'), '#!/bin/sh\n# Keep this launcher beside lib/; add the bundle directory to PATH.\nMYAB_BUNDLE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 1\nexec "$MYAB_BUNDLE_DIR/lib/runtime/node" "$MYAB_BUNDLE_DIR/lib/app/src/cli.js" "$@"\n', { mode: 0o755 });
   }
   const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
-  await fs.writeFile(path.join(bundle, 'BUILD.json'), JSON.stringify({ version: pkg.version, revision, node: process.version, platform, arch }, null, 2) + '\n');
+  const dirty = !!execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim();
+  await fs.writeFile(path.join(bundle, 'BUILD.json'), JSON.stringify({ version: pkg.version, revision, dirty, node: process.version, platform, arch }, null, 2) + '\n');
   await fs.writeFile(path.join(bundle, 'README.txt'), `MyAberdeen CLI ${tag} (${platformName} ${arch})\n\nExtract the entire folder. Run ${platform === 'win32' ? '.\\myab.cmd' : './myab'} help from a terminal.\nKeep lib/ beside the launcher. Node is included; Google Chrome is still required.\nAdd this folder to PATH for the myab command. Do not move or symlink only the launcher.\nSetup and updates: lib/app/README.md\nAI skill: lib/app/skills/myaberdeen-cli/SKILL.md\nBuild details: BUILD.json\nNode and dependency licences are preserved under lib/.\nThese portable bundles are not signed/notarised.\n`);
   const extension = platform === 'win32' ? 'zip' : 'tar.gz';
   const output = path.join(dist, `${name}.${extension}`);

@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { safeFilename } from './downloads.js';
 import { atomicWrite } from './io.js';
+import { getRecordings } from './panopto-data.js';
 import { baseCourseCode, courseDirectories as findCourseDirectories, resolveCourseDirectory } from './course-paths.js';
 
 export function mergeVault(database, config, { deduplicate = true, courseIds, dryRun = false } = {}) {
@@ -98,6 +99,7 @@ function writeCourseIntegration(database, config, course, directory) {
   const messages = query('messages');
   const discussions = query('discussion_posts');
   const files = query('files');
+  const recordings = getRecordings(database, [course.id]);
   const rawDirectory = path.join(config.downloadDir, safeFilename(course.term_name || 'No term'), safeFilename(course.course_code));
   writeMarkdown(path.join(target, 'Index.md'), [
     frontmatter('uni', course.course_code),
@@ -109,6 +111,7 @@ function writeCourseIntegration(database, config, course, directory) {
     '## Offline sections', '',
     `- [Content](Content.md) — ${content.length} records`,
     `- [Files](Files.md) — ${files.length} records`,
+    `- [Recordings](Recordings.md) — ${recordings.length} Panopto recordings`,
     `- [Announcements](Announcements.md) — ${announcements.length}`,
     `- [Gradebook](Gradebook.md) — ${grades.length}`,
     `- [Messages](Messages.md) — ${messages.length} messages in ${conversations.length} conversations`,
@@ -117,6 +120,12 @@ function writeCourseIntegration(database, config, course, directory) {
   ]);
   writeMarkdown(path.join(target, 'Content.md'), renderContent(course, content));
   writeMarkdown(path.join(target, 'Files.md'), renderFiles(course, files));
+  writeMarkdown(path.join(target, 'Recordings.md'), [frontmatter('uni', course.course_code), `# ${course.course_code} recordings`, '',
+    'Automatic captions and AI summaries may contain errors. Linked recordings do not establish a complete folder inventory.', '',
+    ...recordings.flatMap(record => [`## ${escapeMarkdown(record.title)}`, '',
+      `[Watch](${record.url}) · [Offline transcript](${fileLink(path.join(rawDirectory, 'recordings', record.id, 'README.md'))})`, '',
+      `Duration: ${Math.round(record.duration)} seconds. Caption languages: ${Object.keys(record.transcripts || {}).join(', ') || 'none'}. Visibility: ${record.presence}.`, '',
+      record.aiSummary ? `AI-generated summary: ${record.aiSummary}` : '', ''])]);
   writeMarkdown(path.join(target, 'Announcements.md'), renderAnnouncements(course, announcements));
   writeMarkdown(path.join(target, 'Gradebook.md'), renderGrades(course, grades));
   writeMarkdown(path.join(target, 'Messages.md'), renderMessages(course, messages));
@@ -229,7 +238,7 @@ function previewMerge(database, config, directories, courseIds, deduplicate) {
   for (const course of courses) for (const row of database.db.prepare('SELECT * FROM files WHERE course_id=?').all(course.id)) {
     if (deduplicate && row.local_path && isWithin(row.local_path, config.downloadDir) && hashes.has(row.sha256) && fs.existsSync(row.local_path) && hash(fs.readFileSync(row.local_path)) === row.sha256 && !database.db.prepare('SELECT course_id FROM files WHERE local_path=? UNION ALL SELECT course_id FROM file_versions WHERE local_path=?').all(row.local_path, row.local_path).some(r => courseIds && !courseIds.includes(r.course_id))) removals.push(row.local_path);
   }
-  return { dryRun: true, courses: courses.map(course => ({ id: course.id, directory: resolveCourseDirectory(course, config, directories), notes: ['Index', 'Content', 'Files', 'Announcements', 'Gradebook', 'Messages', 'Discussions', 'Schedule'].map(n => n + '.md') })), duplicateRemovals: [...new Set(removals)] };
+  return { dryRun: true, courses: courses.map(course => ({ id: course.id, directory: resolveCourseDirectory(course, config, directories), notes: ['Index', 'Content', 'Files', 'Recordings', 'Announcements', 'Gradebook', 'Messages', 'Discussions', 'Schedule'].map(n => n + '.md') })), duplicateRemovals: [...new Set(removals)] };
 }
 export function repairLocalIndex(database, config) {
   const root = path.join(config.vaultRoot, 'Uni');

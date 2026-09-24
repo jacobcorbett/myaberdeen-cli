@@ -1,6 +1,9 @@
 {
   "profiles": {
-    "current": ["CS1000_27", "CS2000_27"]
+    "current": [
+      "CS1000_27",
+      "CS2000_27"
+    ]
   },
   "academicStartYear": 2023,
   "courseAliases": {
@@ -9,5 +12,6 @@
   },
   "courseDirectories": {},
   "freshnessMinutes": 60,
-  "deepCheckHours": 24
+  "deepCheckHours": 24,
+  "panoptoFolders": {}
 }

@@ -12,6 +12,10 @@ import { extractFiles } from './extract.js';
 import { parseArgs, courseQueries, resumedOptions } from './cli-options.js';
 import { acquireLock, safeMessage, throwIfAborted } from './io.js';
 import { brief, verifyFiles, relocationPlan, applyRelocation, localDoctor } from './health.js';
+import { PanoptoClient } from './panopto-browser.js';
+import { syncPanopto } from './panopto-sync.js';
+import { getRecordings, searchRecordings, transcriptText, recordingId } from './panopto-data.js';
+import { downloadRecording } from './panopto-download.js';
 
 let config, options, command, release, activeSession;
 const controller = new AbortController();
@@ -22,10 +26,13 @@ try {
   config = getConfig();
   if (command === 'help') printHelp();
   else if (command === 'paths') output(config);
+  else if (command === 'version') console.log(JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
   else {
-    const mutates = ['login', 'sync', 'check', 'download', 'refresh', 'repair', 'extract'].includes(command) || ['export', 'merge-vault'].includes(command) && !options.dryRun || command === 'relocate-files' && options.apply;
+    const mutates = ['login', 'panopto-login', 'panopto-sync', 'panopto-download', 'sync', 'check', 'download', 'refresh', 'repair', 'extract'].includes(command) || ['export', 'merge-vault'].includes(command) && !options.dryRun || command === 'relocate-files' && options.apply;
     if (mutates) release = acquireLock(config.stateDir);
     if (command === 'login') await login();
+    else if (command === 'panopto-login') await panoptoLogin();
+    else if (['panopto-sync', 'panopto-download'].includes(command)) await runPanopto();
     else if (command === 'courses') await withSession(async session => {
       const { memberships, terms } = await getAccountOverview(session);
       const names = new Map(terms.map(t => [t.id, t.name]));
@@ -70,7 +77,18 @@ async function localCommand() {
     }
     const courses = selected(database.db.prepare('SELECT * FROM courses ORDER BY course_code').all());
     const courseIds = courses.map(c => c.id);
-    if (command === 'status' || command === 'brief') {
+    if (['recordings', 'recording', 'transcript'].includes(command)) {
+      const records = getRecordings(database, courseIds);
+      if (command === 'recordings') { output(searchRecordings(records, options.search)); return; }
+      const matches = records.filter(r => r.id === recordingId(options.id));
+      if (matches.length !== 1) throw new Error('Select one course containing this archived recording. Run panopto-sync first if needed.');
+      const record = matches[0];
+      if (command === 'recording') { output(record); return; }
+      const language = options.language || Object.keys(record.transcripts || {})[0];
+      const track = record.transcripts?.[language];
+      if (!track) throw new Error('Requested transcript is not available; inspect recording for available languages.');
+      process.stdout.write(transcriptText(track.captions, options.format || (options.json ? 'json' : 'text')));
+    } else if (command === 'status' || command === 'brief') {
       if (command === 'status' && database.db.prepare('PRAGMA user_version').get().user_version < 2) output(database.status());
       else output(brief(database, config, courseIds));
     } else if (command === 'changes') {
@@ -103,6 +121,7 @@ async function runSync() {
       if (!database) database = openDatabase(true);
       const run = database.db.prepare('SELECT * FROM sync_runs WHERE id=?').get(options.resume);
       if (!run) throw new Error('Resume run does not exist.');
+      if (JSON.parse(run.options_json).kind === 'panopto') throw new Error('Repeat panopto-sync with its course selection; Blackboard resume cannot resume a Panopto run.');
       if (!JSON.parse(run.scope_json).length) throw new Error('This run ended before selecting courses; rerun the original explicit selection.');
       const finished = new Set(database.db.prepare("SELECT course_id FROM course_runs WHERE run_id=? AND status='completed'").all(run.id).map(c => c.course_id));
       resumeIds = JSON.parse(run.scope_json).filter(id => !finished.has(id));
@@ -118,6 +137,11 @@ async function runSync() {
         resumeIds = courses.map(c => c.id);
       }
       const result = await syncArchive({ session, database, config, courseQuery: courseQueries(config, options), selectedIds: resumeIds, resumeFrom: options.resume, limitCourses: options.limitCourses, limitFiles: options.limitFiles, downloadFiles, deep: !!options.deep, signal: controller.signal, onProgress: message => console.error(message) });
+      if (options.panopto) {
+        const courses = database.db.prepare('SELECT * FROM courses').all().filter(c => result.courseIds.includes(c.id));
+        result.panopto = await syncPanopto({ session, database, config, courses, limitRecordings: options.limitRecordings, signal: controller.signal, onProgress: message => console.error(message) });
+        if (result.panopto.status !== 'completed') process.exitCode = 3;
+      }
       exportArchive(database, config, { courseIds: result.courseIds });
       if (options.extract) { result.extraction = extractFiles(database, config, { courseIds: result.courseIds }); if (result.extraction.errors.length) process.exitCode = 3; }
       output(result);
@@ -136,12 +160,18 @@ function printHelp() {
 
 Network: login, courses, check (metadata), sync, refresh/download (metadata and files)
 Offline: brief/status, changes, show, extract, export, merge-vault, verify-files, relocate-files
-Maintenance: doctor [--live], repair, paths
+Panopto: panopto-login, panopto-sync, recordings, recording, transcript, panopto-download
+Maintenance: doctor [--live], repair, paths, version
 
 Select: --course <ID/code/name> (repeatable), --term <name>, --profile <name>, --active, --all
 Mutating/archive commands require explicit scope. --active uses config.profiles.current.
 Preview: --dry-run on check/sync/refresh/download/export/merge-vault
 Sync: --limit-courses N, --limit-files N, --deep, --resume <run-id>, --headed, --extract
+Panopto sync: --course/--active/--all [--limit-recordings N] [--folder UUID] [--dry-run]
+Or add --panopto to check/sync/refresh; video downloads remain explicit.
+Panopto read: recordings --course CODE [--search TEXT]; recording --course CODE --id UUID
+Transcript: --course CODE --id UUID [--language NAME] [--format text|json|srt|vtt]
+Panopto download: --course CODE --id UUID [--dry-run] [--max-bytes N] (default 2 GiB)
 Read: changes --since <cursor-or-ISO-date> [--limit N]; show --course <code> --id <content-id>
 Relocate: --from <old-root> --to <new-root> [--apply]; destinations are hash-verified
 Merge: --keep-duplicates; preview generated notes and removals with --dry-run
@@ -202,4 +232,46 @@ async function login() {
     authenticatedCookies = null;
     await persistenceSession.close();
   }
+}
+
+async function withPanoptoSession(callback, { interactive = false } = {}) {
+  const session = new BlackboardSession(config, { headless: !interactive && !options.headed, signal: controller.signal }); activeSession = session;
+  try {
+    if (interactive) await session.openInteractive();
+    else await session.open({ requireAuthentication: false });
+    return await callback(session);
+  } finally { await session.close(); activeSession = null; }
+}
+async function panoptoLogin() {
+  console.error('Opening Panopto in the dedicated Chrome profile. Complete any university sign-in/MFA in that window.');
+  await withPanoptoSession(async session => {
+    const client = new PanoptoClient(session, { interactive: true, signal: controller.signal });
+    try { await client.open(); console.log('Panopto browser sign-in verified.'); } finally { await client.close(); }
+  }, { interactive: true });
+}
+async function runPanopto() {
+  const database = openDatabase(!!options.dryRun);
+  try {
+    const courses = selected(database.db.prepare('SELECT * FROM courses ORDER BY course_code').all());
+    if (!courses.length) throw new Error('No archived courses. Run myab check with a course selection first.');
+    if (options.folder && courses.length !== 1) throw new Error('--folder requires exactly one selected course.');
+    if (command === 'panopto-sync' && options.dryRun) { output({ dryRun: true, courses: courses.map(c => ({ id: c.id, code: c.course_code })), folder: options.folder || null, limitRecordings: options.limitRecordings || null }); return; }
+    if (command === 'panopto-download') {
+      if (courses.length !== 1) throw new Error('panopto-download requires exactly one selected course.');
+      const id = recordingId(options.id);
+      if (!getRecordings(database, [courses[0].id]).some(r => r.id === id && r.presence !== 'historical')) throw new Error('Recording is not currently archived for this course. Run panopto-sync first.');
+    }
+    await withPanoptoSession(async session => {
+      if (command === 'panopto-sync') {
+        database.recoverInterruptedRuns();
+        const result = await syncPanopto({ session, database, config, courses, limitRecordings: options.limitRecordings, folder: options.folder, signal: controller.signal, onProgress: message => console.error(message) });
+        exportArchive(database, config, { courseIds: courses.map(c => c.id) }); output(result);
+        if (result.status !== 'completed') process.exitCode = 3;
+      } else {
+        const client = new PanoptoClient(session, { signal: controller.signal });
+        try { await client.open(); output(await downloadRecording({ client, database, config, courseId: courses[0].id, id: options.id, signal: controller.signal, dryRun: !!options.dryRun, maxBytes: options.maxBytes })); }
+        finally { await client.close(); }
+      }
+    });
+  } finally { database.close(); }
 }

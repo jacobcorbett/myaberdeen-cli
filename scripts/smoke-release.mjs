@@ -35,14 +35,20 @@ try {
     return result.stdout;
   };
   assert.match(run(['help']), /Usage: myab/);
+  assert.match(run(['help']), /panopto-sync/);
+  assert.equal(run(['version']).trim(), pkg.version);
   assert.equal(JSON.parse(run(['paths'])).stateDir, state);
   assert.equal(JSON.parse(run(['doctor'])).node, JSON.parse(await fs.readFile(path.join(bundle, 'BUILD.json'), 'utf8')).node);
   // Run the bundled dependency graph and SQLite against synthetic data, without Chrome or an account.
   const fixture = `
     import { ArchiveDatabase } from './src/database.js';
     import { chromium, request } from 'playwright-core';
+    import { storeRecording, viewerUrl } from './src/panopto-data.js';
     const db = new ArchiveDatabase(process.env.MYAB_DATABASE);
     if (db.db.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw new Error('SQLite integrity failed');
+    db.upsertCourse({id:'synthetic',courseId:'CS1000_27',name:'Synthetic course',isAvailable:true});
+    db.startRun();
+    storeRecording(db, 'synthetic', {id:'11111111-1111-1111-1111-111111111111',url:viewerUrl('11111111-1111-1111-1111-111111111111'),title:'Synthetic recording',duration:3,transcripts:{'1':{captions:[{start:0,duration:3,text:'Synthetic transcript'}]}}});
     db.close();
     if (chromium.name() !== 'chromium') throw new Error('Missing Playwright browser dependency');
     const context = await request.newContext();
@@ -50,6 +56,8 @@ try {
   `;
   execFileSync(runtime, ['--input-type=module', '-e', fixture], { cwd: app, env, stdio: 'inherit' });
   JSON.parse(run(['status']));
+  assert.equal(JSON.parse(run(['recordings', '--course', 'CS1000_27']))[0].captionCount, 1);
+  assert.match(run(['transcript', '--course', 'CS1000_27', '--id', '11111111-1111-1111-1111-111111111111', '--format', 'srt']), /Synthetic transcript/);
   assert.equal(JSON.parse(run(['doctor'])).databaseIntegrity, 'ok');
   console.log(`Portable release smoke check passed: ${name}`);
 } finally {
