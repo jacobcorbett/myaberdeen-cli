@@ -35,11 +35,12 @@ Use concise commit prefixes such as `feat:`, `fix:`, `docs:`, `chore:` or `refac
 
 ## Local checks
 
-Development requires Git, npm and Node 22.13+ on the 22 branch, or Node 24+; Node 23 is unsupported. Google Chrome is needed for live sign-in, but the automated tests use synthetic data and mocked services and need no university account.
+Development requires Git, npm and Node 26.13.0 or newer within Node 26; use the exact 26.13.0 pin in `.node-version` for reproducible development. Node 22, 24 and other major versions are unsupported. Google Chrome is needed for live sign-in, but the automated tests use synthetic data and mocked services and need no university account.
 
 ```sh
 npm ci
 npm run check
+npm run audit:security
 git diff --check
 ```
 

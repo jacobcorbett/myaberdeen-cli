@@ -12,4 +12,8 @@ If a university session or credential is exposed, revoke it through the relevant
 
 Security fixes target the latest release and the current `main` branch. Update older versions before reproducing a problem where possible. This is a volunteer-maintained, unofficial tool; no response-time guarantee is offered.
 
+The current source requires Node 26.13.0 or newer within Node 26. Portable builds pin exactly Node 26.13.0; Node 22 and 24 are no longer supported. Run `npm run audit:security` to check production dependency advisories and official Node security/support data. Keep Google Chrome updated separately. These checks cover known published issues, not undisclosed vulnerabilities.
+
+The published 0.3.2 macOS bundles contain older Node runtimes (arm64: 24.20.0; x64: 24.19.0), below the October 2026 security fixes. Upgrade to 0.3.3 or use the updated source with Node 26.13.0. Existing release assets are not replaced in place.
+
 The CLI accesses Blackboard and Panopto read-only but stores sensitive course data and login sessions locally. The dedicated Chrome profile uses reduced OS keychain integration, and login makes session-only cookies persistent for up to seven days on disk, subject to provider expiry and revocation. Use a private local account, protect backups and never share the profile. See the README's authentication and local-data guidance.

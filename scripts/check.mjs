@@ -1,3 +1,5 @@
+import { assertSupportedRuntime } from '../src/runtime-policy.js';
+assertSupportedRuntime();
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 for (const directory of ['src', 'scripts']) for (const name of fs.readdirSync(directory)) {

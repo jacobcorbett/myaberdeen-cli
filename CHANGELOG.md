@@ -6,6 +6,17 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-03
+
+### Security
+
+- Pin portable runtimes and CI to Node 26.13.0, with checksum verification of the downloaded runtime. The 0.3.2 macOS bundles contained older Node 24 patches; upgrade to 0.3.3 to receive the patched bundled runtime.
+- Add a security check for production dependency advisories, official Node security releases and runtime end-of-life dates. Update locked parse5 and playwright-core dependencies and pin maintained GitHub Actions to reviewed commits.
+
+### Changed
+
+- Require Node 26.13.0 or newer within Node 26 for source installations. Drop Node 22 and 24 support; unsupported runtimes fail before CLI commands run. CI tests Node 26.13.0 on Linux, macOS and Windows.
+
 ### Added
 
 - This changelog, covering the published releases from 0.2.0 onwards. The earlier source-only work is included in the first release it shipped with rather than assigned an invented release number or date.
@@ -100,7 +111,8 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 - Node SQLite warning handling in command-error checks, database cleanup before removing Windows fixtures, and Windows launcher quoting in the portable smoke check.
 
-[Unreleased]: https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.3
 [0.3.2]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.2
 [0.3.1]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.1
 [0.3.0]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.0

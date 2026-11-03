@@ -41,7 +41,7 @@ To update a portable installation, download and verify the new matching archive,
 
 ## Install from source and sign in
 
-Use Node **22.13+ on the 22 branch, or Node 24+**, and an installed Google Chrome. Node 23 is not supported. Runtime code uses `node:sqlite`; no extra browser is downloaded.
+Use Node **26.13.0 or newer within Node 26**, and an installed Google Chrome. Node 22, 24 and other major versions are unsupported. The exact development and portable-release pin is **26.13.0**, recorded in `.node-version`. Runtime code uses `node:sqlite`; no extra browser is downloaded.
 
 ```sh
 git clone https://github.com/jacobcorbett/myaberdeen-cli.git
@@ -247,7 +247,7 @@ npm run build:release
 npm run smoke:release
 ```
 
-The build targets the current OS/CPU and downloads the matching official Node distribution for the running Node version, verifying its published SHA-256. Internet access, npm and `tar` (macOS/Linux) or PowerShell (Windows) are required. Outputs go to ignored `dist/`. An explicit source allowlist excludes local profiles, archives and configuration; the project MIT licence, security policy, contribution guide, and dependency/Node licence files are included. The smoke check extracts the archive into a temporary path containing spaces and exercises the actual launcher, bundled dependencies and SQLite with synthetic data, without university credentials.
+The build targets the current OS/CPU and downloads the matching official Node distribution for the exact version pinned in `.node-version` (26.13.0), independently of the build host version, verifying its published SHA-256. Internet access, npm and `tar` (macOS/Linux) or PowerShell (Windows) are required. Outputs go to ignored `dist/`. An explicit source allowlist excludes local profiles, archives and configuration; the project MIT licence, security policy, contribution guide, and dependency/Node licence files are included. The smoke check extracts the archive into a temporary path containing spaces and exercises the actual launcher, bundled dependencies and SQLite with synthetic data, without university credentials.
 
 ## Making releases
 
@@ -257,7 +257,7 @@ The build targets the current OS/CPU and downloads the matching official Node di
 
 The Release workflow runs tests, builds and smoke-checks each archive on its native platform, and publishes the release with all downloads/checksums only when every build succeeds. Manual publishing requires an existing `vX.Y.Z` tag matching the package version. GitHub's source archives and the normal source-install route remain available.
 
-Release jobs use Node 24. Platform checks run on macOS ARM64, macOS Intel, Linux x64 and Windows x64. Live authentication is deliberately excluded from CI. Only the repository owner can run the release jobs. Existing release assets are never overwritten by the workflow; `BUILD.json` records the exact runtime and commit used.
+Release jobs use the exact Node 26.13.0 pin in `.node-version`. Platform checks run on macOS ARM64, macOS Intel, Linux x64 and Windows x64. Live authentication is deliberately excluded from CI. Only the repository owner can run the release jobs. Existing release assets are never overwritten by the workflow; `BUILD.json` records the exact runtime and commit used.
 
 ## Contributing
 
@@ -268,3 +268,5 @@ Open an issue first, then work in your own fork and submit a pull request for Ja
 Copyright © 2026 Jacob Corbett. Released under the [MIT licence](LICENSE). Redistributed copies or substantial portions must retain the copyright and licence notices; separate academic citation is not a licence requirement. Contributions are accepted under the same licence.
 
 Report security issues through the private routes in [SECURITY.md](SECURITY.md), not a public issue.
+
+The CI security check runs `npm run audit:security`: it checks production dependencies with npm audit and compares the supported Node floor and bundled runtime against official Node security releases and end-of-life dates. It requires network access and fails if official data is unavailable. A future security release requires a deliberate policy and pin update; these checks cannot guarantee the absence of undisclosed vulnerabilities.

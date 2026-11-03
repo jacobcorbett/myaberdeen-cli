@@ -1,4 +1,6 @@
 import fs from 'node:fs/promises';
+import { assertSupportedRuntime, RELEASE_NODE } from '../src/runtime-policy.js';
+assertSupportedRuntime();
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -41,6 +43,10 @@ try {
   assert.match(run(['help']), /Usage: myab/);
   assert.match(run(['help']), /panopto-sync/);
   assert.equal(run(['version']).trim(), pkg.version);
+  const build = JSON.parse(await fs.readFile(path.join(bundle, 'BUILD.json'), 'utf8'));
+  assert.equal(build.node, `v${RELEASE_NODE}`);
+  assertSupportedRuntime(build.node);
+  await fs.access(path.join(app, 'CHANGELOG.md'));
   assert.equal(JSON.parse(run(['paths'])).stateDir, state);
   assert.equal(JSON.parse(run(['doctor'])).node, JSON.parse(await fs.readFile(path.join(bundle, 'BUILD.json'), 'utf8')).node);
   // Run the bundled dependency graph and SQLite against synthetic data, without Chrome or an account.

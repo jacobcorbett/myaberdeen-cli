@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { assertSupportedRuntime } from './runtime-policy.js';
 import path from 'node:path';
 import { getConfig, getConfigPaths, ConfigurationError, prepareLocalState, requireVault } from './config.js';
 import { BlackboardSession, AuthenticationRequiredError } from './browser.js';
@@ -24,6 +25,7 @@ const controller = new AbortController();
 const onSignal = signal => { controller.abort(new Error(`Cancelled by ${signal}.`)); process.exitCode = signal === 'SIGINT' ? 130 : 143; if (activeSession) activeSession.close().catch(() => {}); };
 process.once('SIGINT', () => onSignal('SIGINT')); process.once('SIGTERM', () => onSignal('SIGTERM'));
 try {
+  assertSupportedRuntime();
   ({ command, options } = parseArgs(process.argv.slice(2)));
   if (command === 'help') printHelp();
   else if (command === 'version') console.log(JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);

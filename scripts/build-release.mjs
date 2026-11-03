@@ -1,4 +1,6 @@
 import fs from 'node:fs/promises';
+import { assertSupportedRuntime, RELEASE_NODE } from '../src/runtime-policy.js';
+assertSupportedRuntime();
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
@@ -6,6 +8,9 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const runtimeVersion = (await fs.readFile(path.join(root, '.node-version'), 'utf8')).trim();
+if (runtimeVersion !== RELEASE_NODE) throw new Error('.node-version must match the reviewed release runtime policy.');
+assertSupportedRuntime(runtimeVersion);
 const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
 const platform = process.platform, arch = process.arch;
 if (!['darwin', 'linux', 'win32'].includes(platform) || !['arm64', 'x64'].includes(arch)) throw new Error('Unsupported release platform/architecture.');
@@ -19,9 +24,9 @@ const stage = await fs.mkdtemp(path.join(os.tmpdir(), 'myab-build-'));
 const bundle = path.join(stage, name);
 const app = path.join(bundle, 'lib', 'app');
 const runtime = path.join(bundle, 'lib', 'runtime');
-const downloadRoot = `https://nodejs.org/dist/${process.version}`;
+const downloadRoot = `https://nodejs.org/dist/v${runtimeVersion}`;
 const nodeName = platform === 'win32' ? 'node.exe' : 'node';
-const runtimeBase = `node-${process.version}-${platform === 'win32' ? 'win' : platform}-${arch}`;
+const runtimeBase = `node-v${runtimeVersion}-${platform === 'win32' ? 'win' : platform}-${arch}`;
 const runtimeArchive = `${runtimeBase}.${platform === 'win32' ? 'zip' : 'tar.gz'}`;
 
 async function download(url) {
@@ -33,7 +38,7 @@ try {
   await fs.mkdir(app, { recursive: true });
   await fs.mkdir(runtime, { recursive: true });
   // Explicit allowlist: never copy the working tree, home, profile or course archive wholesale.
-  for (const item of ['src', 'skills', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'LICENSE', 'AGENTS.md', 'config.example.json', 'package.json', 'package-lock.json']) {
+  for (const item of ['src', 'skills', '.node-version', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'LICENSE', 'AGENTS.md', 'config.example.json', 'package.json', 'package-lock.json']) {
     await fs.cp(path.join(root, item), path.join(app, item), { recursive: true });
   }
   const npm = platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -63,7 +68,7 @@ try {
   }
   const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   const dirty = !!execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim();
-  await fs.writeFile(path.join(bundle, 'BUILD.json'), JSON.stringify({ version: pkg.version, revision, dirty, node: process.version, platform, arch }, null, 2) + '\n');
+  await fs.writeFile(path.join(bundle, 'BUILD.json'), JSON.stringify({ version: pkg.version, revision, dirty, node: `v${runtimeVersion}`, buildNode: process.version, platform, arch }, null, 2) + '\n');
   await fs.writeFile(path.join(bundle, 'README.txt'), `MyAberdeen CLI ${tag} (${platformName} ${arch})\n\nExtract the entire folder. Run ${platform === 'win32' ? '.\\myab.cmd' : './myab'} help from a terminal.\nKeep lib/ beside the launcher. Node is included; Google Chrome is still required.\nAdd this folder to PATH for the myab command. Do not move or symlink only the launcher.\nSetup and updates: lib/app/README.md\nAI skill: lib/app/skills/myaberdeen-cli/SKILL.md\nBuild details: BUILD.json\nNode and dependency licences are preserved under lib/.\nThese portable bundles are not signed/notarised.\n`);
   const extension = platform === 'win32' ? 'zip' : 'tar.gz';
   const output = path.join(dist, `${name}.${extension}`);

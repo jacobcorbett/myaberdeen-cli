@@ -21,7 +21,7 @@ Canonical source: https://github.com/jacobcorbett/myaberdeen-cli.
 
 Find the existing checkout and `myab` executable before cloning another copy. Read that checkout's `README.md`, `package.json` and `myab help`; these are authoritative for the installed revision. Run `myab paths` to resolve local configuration rather than assuming the author's filesystem layout.
 
-For a new install, use Git, npm, Node 22.13+ on the 22 branch or Node 24+ (not Node 23), and an installed Google Chrome:
+For a new install, use Git, npm, Node 26.13.0 or newer within Node 26 (Node 22, 24 and other majors are unsupported; `.node-version` pins 26.13.0), and an installed Google Chrome:
 
 ```sh
 git clone https://github.com/jacobcorbett/myaberdeen-cli.git
