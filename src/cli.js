@@ -193,6 +193,8 @@ Exit: 0 success, 1 error, 2 login required, 3 partial/limited, 130/143 cancelled
 }
 async function login() {
   console.log('Opening the dedicated MyAberdeen Chrome profile.');
+  console.log('This stores sign-in cookies locally, extending session-only cookies to seven days on disk; provider expiry still applies.');
+  console.log('OS keychain integration is reduced. Use a trusted account and never share or sync the profile. See README: Authentication and local data.');
   console.log('Complete the Aberdeen sign-in in that window; it will close after verification.');
   console.log('If Microsoft asks "Stay signed in?", choose Yes to allow future automatic sign-in.');
   const session = new BlackboardSession(config, { headless: false, signal: controller.signal }); activeSession = session;

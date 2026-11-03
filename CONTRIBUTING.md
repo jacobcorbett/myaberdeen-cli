@@ -4,10 +4,10 @@ Please open an issue before starting a change. Describe the problem or proposal 
 
 ## Fork and pull request workflow
 
-This repository is private; you need an invitation to view it and fork it. Keep your fork and any copies private. Only Jacob (`jacobcorbett`) can change branches or tags in the upstream repository, including merging pull requests. Contributors should work in their own fork, not push branches here.
+For a public repository, you can fork and submit a PR without collaborator access. If the repository is still private, GitHub access is required until publication. Only Jacob (`jacobcorbett`) can change branches or tags in the upstream repository, including merging pull requests. Contributors should work in their own fork, not push branches here.
 
 1. Open an issue and discuss the change with Jacob.
-2. Use GitHub's **Fork** button to create your private fork.
+2. Use GitHub's **Fork** button to create your own fork.
 3. Clone your fork and add the upstream repository. Replace `YOUR_USERNAME` below with your GitHub username:
 
    ```sh
@@ -58,6 +58,10 @@ These packaging checks run on your current OS/CPU and download the official Node
 - Inspect diagnostics before sharing them: paths, course membership and error details can reveal personal information. Never paste raw browser/network captures or your local archive.
 - Blackboard access stays read-only: no submission, messaging, enrolment or assessment-attempt operations. Respect authentication, course permissions and download controls; do not add bypasses or broad account crawls.
 - Obsidian integration is optional. Do not add a contributor's personal paths, course selection or academic start year as defaults.
-- If you discover an exposed credential or security problem, contact Jacob privately first. Do not put the secret or a working exploit in an issue; revoke any exposed credential promptly.
+- If you discover an exposed credential or security problem, follow the private reporting instructions in [SECURITY.md](SECURITY.md). Do not put the secret or a working exploit in an issue; revoke any exposed credential promptly.
 
 Read [AGENTS.md](AGENTS.md) for the repository's development guidance and the [README](README.md) for setup and supported behaviour. AI-assisted contributions are welcome under the same review, privacy and testing requirements; you remain responsible for understanding the change.
+
+## Licence
+
+By submitting a contribution, you agree to license it under the project's [MIT licence](LICENSE). Keep existing copyright/licence notices and include the necessary notices for third-party code. Jacob Corbett's copyright and the MIT permission notice must remain in redistributed copies or substantial portions.

@@ -14,14 +14,14 @@ This is a terminal-native MyAberdeen archive client for University of Aberdeen u
 ## Safety and scope
 
 - Treat Blackboard as read-only. Do not add write, submit, delete, enrolment, messaging, or assessment-attempt operations.
-- Never print, log, commit, or persist cookies, SSO credentials, XSRF tokens, or request headers containing secrets.
+- Never print, log or commit cookies, SSO credentials, XSRF tokens or request headers containing secrets. Only the dedicated private Chrome profile may persist authentication state as documented; never export it into archives or shared files.
 - Keep the browser profile and database outside the repository, in the user's local application-data directory with private permissions.
 - Be conservative with request concurrency and retries. This is a personal archive utility, not a crawler.
 - External LTI services are separate systems. Panopto reads use the normal user browser sign-in and course-scoped commands; other services such as Turnitin remain links. Never bypass authentication, folder permissions or download controls.
 
 ## Workflow
 
-- Read `CONTRIBUTING.md` before preparing a contribution. Contributors use a private fork and PR; only Jacob changes upstream branches/tags or merges PRs.
+- Read `CONTRIBUTING.md` before preparing a contribution. Contributors use their own fork and PR; only Jacob changes upstream branches/tags or merges PRs.
 
 - Keep the CLI usable without a visible browser except for initial or expired login.
 - Use the installed Google Chrome through `playwright-core`; do not download a second browser unless explicitly requested.
@@ -34,7 +34,7 @@ This is a terminal-native MyAberdeen archive client for University of Aberdeen u
 ## Git conventions
 
 - Keep commits focused and reversible, using concise conventional commit subjects.
-- Run `npm run check` before publishing. Keep the GitHub repository private.
+- Run `npm run check` before publishing. Do not change repository visibility unless Jacob authorises it.
 - Inspect staged files for runtime data and secrets before each commit.
 
 ## Archive-first workflow

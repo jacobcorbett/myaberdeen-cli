@@ -1,6 +1,8 @@
 # MyAberdeen CLI
 
-A private, read-only terminal client for the University of Aberdeen's Blackboard Learn site. It reuses a dedicated Chrome profile after interactive sign-in, archives course data in SQLite, and keeps ordinary Blackboard files locally. Normal lookups can use the archive without opening Chrome.
+An unofficial, read-only terminal client for the University of Aberdeen's Blackboard Learn site. It reuses a dedicated Chrome profile after interactive sign-in, archives course data in SQLite, and keeps ordinary Blackboard files locally. Normal lookups can use the archive without opening Chrome.
+
+This project is not affiliated with or endorsed by the University of Aberdeen, Anthology/Blackboard or Panopto. Use only your own authorised access, follow your institution's IT rules, and respect course-content and recording permissions. The MIT licence covers this software, not university materials downloaded with it.
 
 ## Start here
 
@@ -16,7 +18,7 @@ Here `myab` means your installed command. From a portable download folder, use `
 
 ## Download a portable release
 
-Download the archive for your computer from [GitHub Releases](https://github.com/jacobcorbett/myaberdeen-cli/releases/latest). Access is required while this repository is private.
+Download the archive for your computer from [GitHub Releases](https://github.com/jacobcorbett/myaberdeen-cli/releases/latest).
 
 | Computer | Asset suffix | Command after extracting |
 | --- | --- | --- |
@@ -51,6 +53,16 @@ myab setup
 
 Complete Aberdeen's normal password/MFA flow yourself. If Microsoft offers **Stay signed in?**, choose **Yes**. The CLI can reuse remembered SSO when the Blackboard session expires; it cannot override university expiry or MFA requirements. Authentication state stays inside the private Chrome profile.
 
+### Authentication and local data
+
+Login intentionally saves your session in a dedicated Chrome profile. After successful sign-in, the CLI changes session-only cookies for all sites in that profile, including the sign-in provider, into persistent cookies with an expiry seven days later. Existing expiry dates are preserved. Provider-side expiry, revocation and MFA requirements still apply; this does not guarantee seven days of access.
+
+Chrome runs with `--password-store=basic` and `--use-mock-keychain` to support headless reuse. Do not assume the profile's cookies have normal OS keychain protection. POSIX permissions are restricted, while Windows uses your account's inherited ACLs. Anyone who obtains a usable copy of the profile may be able to reuse your session. Use this only on a trusted personal account; never share or sync the profile, and exclude it from shared backups.
+
+To stop local session reuse, finish all CLI operations, close the dedicated CLI Chrome window, run `myab paths` to identify `profileDir`, and delete **that dedicated profile directory only**. A fresh `myab login` is then required. This does not delete your course archive or revoke already-copied sessions; use the provider's sign-out/revocation controls for those.
+
+Downloaded files and exports can include grades, messages and other people's information. The default `~/Documents/MyAberdeen` may be covered by iCloud, OneDrive or another backup service. Choose a suitable private location with `MYAB_DOWNLOAD_DIR` and protect your archives and backups. Review all diagnostics before sharing them.
+
 Interactive login launches the configured Chrome executable. Defaults cover macOS, standard Google Chrome installations on Linux, and Windows; override `MYAB_CHROME` for another installation. Live SSO has been verified on macOS. CI checks the deterministic code on macOS and Linux; other live platform/login combinations still need local verification.
 
 ## AI agent skill and updates
@@ -63,7 +75,7 @@ Example request:
 
 > Read `skills/myaberdeen-cli/SKILL.md`, install this CLI, help me sign in, and configure only the courses I select. When I ask for an update, check GitHub, preserve my local state and changes, update the CLI and skill, and verify the installed revision.
 
-The repository currently requires GitHub access. There is no published npm package or built-in self-updater. The following updates a **source checkout**; portable downloads use the replacement procedure above. For source updates, first inspect `git status`, verify `origin`, run `git fetch origin`, and review incoming changes. On a clean `main` checkout that can fast-forward, run these commands in order, stopping if any fails:
+There is no published npm package or built-in self-updater. The following updates a **source checkout**; portable downloads use the replacement procedure above. For source updates, first inspect `git status`, verify `origin`, run `git fetch origin`, and review incoming changes. On a clean `main` checkout that can fast-forward, run these commands in order, stopping if any fails:
 
 ```sh
 git merge --ff-only origin/main
@@ -230,7 +242,7 @@ npm run build:release
 npm run smoke:release
 ```
 
-The build targets the current OS/CPU and downloads the matching official Node distribution for the running Node version, verifying its published SHA-256. Internet access, npm and `tar` (macOS/Linux) or PowerShell (Windows) are required. Outputs go to ignored `dist/`. An explicit source allowlist excludes local profiles, archives and configuration; dependency and Node licence files are included. The smoke check extracts the archive into a temporary path containing spaces and exercises the actual launcher, bundled dependencies and SQLite with synthetic data, without university credentials.
+The build targets the current OS/CPU and downloads the matching official Node distribution for the running Node version, verifying its published SHA-256. Internet access, npm and `tar` (macOS/Linux) or PowerShell (Windows) are required. Outputs go to ignored `dist/`. An explicit source allowlist excludes local profiles, archives and configuration; the project MIT licence, security policy, contribution guide, and dependency/Node licence files are included. The smoke check extracts the archive into a temporary path containing spaces and exercises the actual launcher, bundled dependencies and SQLite with synthetic data, without university credentials.
 
 ## Making releases
 
@@ -238,10 +250,16 @@ The build targets the current OS/CPU and downloads the matching official Node di
 2. Run the **Release** workflow manually against the branch with **publish disabled** to check every platform before tagging.
 3. Push a matching stable tag, for example `git tag v0.2.0` then `git push origin v0.2.0`.
 
-The Release workflow runs tests, builds and smoke-checks each archive on its native platform, and publishes the release with all downloads/checksums only when every build succeeds. Publishing a release through GitHub's UI also triggers builds; assets appear after successful checks. Manual publishing requires an existing `vX.Y.Z` tag matching the package version. GitHub's source archives and the normal source-install route remain available.
+The Release workflow runs tests, builds and smoke-checks each archive on its native platform, and publishes the release with all downloads/checksums only when every build succeeds. Manual publishing requires an existing `vX.Y.Z` tag matching the package version. GitHub's source archives and the normal source-install route remain available.
 
-Release jobs use Node 24. Platform checks run on macOS ARM64, macOS Intel, Linux x64 and Windows x64. Live authentication is deliberately excluded from CI. A rerun can replace assets for the same tag; `BUILD.json` records the exact runtime and commit used.
+Release jobs use Node 24. Platform checks run on macOS ARM64, macOS Intel, Linux x64 and Windows x64. Live authentication is deliberately excluded from CI. Only the repository owner can run the release jobs. Existing release assets are never overwritten by the workflow; `BUILD.json` records the exact runtime and commit used.
 
 ## Contributing
 
-Open an issue first, then work in a private fork and submit a pull request for Jacob to review and merge. Upstream branches and tags are owner-only. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, local checks and privacy requirements.
+Open an issue first, then work in your own fork and submit a pull request for Jacob to review and merge. Upstream branches and tags are owner-only. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, local checks and privacy requirements.
+
+## Licence and security
+
+Copyright © 2026 Jacob Corbett. Released under the [MIT licence](LICENSE). Redistributed copies or substantial portions must retain the copyright and licence notices; separate academic citation is not a licence requirement. Contributions are accepted under the same licence.
+
+Report security issues through the private routes in [SECURITY.md](SECURITY.md), not a public issue.

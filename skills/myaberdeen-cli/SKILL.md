@@ -17,7 +17,7 @@ For a portable update, download and verify the new matching archive, extract it 
 
 ## Locate or install from source
 
-Canonical source: https://github.com/jacobcorbett/myaberdeen-cli (access is required while the repository is private).
+Canonical source: https://github.com/jacobcorbett/myaberdeen-cli.
 
 Find the existing checkout and `myab` executable before cloning another copy. Read that checkout's `README.md`, `package.json` and `myab help`; these are authoritative for the installed revision. Run `myab paths` to resolve local configuration rather than assuming the author's filesystem layout.
 
@@ -37,7 +37,7 @@ myab doctor --live
 
 If GitHub requires authentication, use the user's existing GitHub access; never request credentials in chat. If npm's global prefix is not writable, use a user-owned prefix or run `node /absolute/path/to/myaberdeen-cli/src/cli.js` instead of using sudo. Keep the checkout because `npm link` points into it.
 
-`myab login` opens the dedicated Chrome profile. Let the user complete SSO/MFA; choosing “Stay signed in” allows remembered SSO. Normal live reads then run headlessly. Do not install an extra Playwright browser: this project uses `playwright-core` and installed Chrome. `MYAB_CHROME` can override its executable.
+`myab login` opens the dedicated Chrome profile. Before a new user signs in, explain the authentication/local-data section of the README: session-only cookies (including identity-provider cookies) are made persistent for up to seven days on disk, provider expiry still applies, OS keychain integration is reduced, and the profile must not be shared or synced. Deleting the dedicated profile stops local reuse but does not revoke copied sessions. Let the user complete SSO/MFA; choosing “Stay signed in” allows remembered SSO. Normal live reads then run headlessly. Do not install an extra Playwright browser: this project uses `playwright-core` and installed Chrome. `MYAB_CHROME` can override its executable.
 
 After login, use `myab setup` in a terminal to choose current courses. For an agent without an interactive terminal, read `myab courses --json` and run `myab setup --course EXACT_ID_OR_CODE` with one repeated flag per chosen course. Never infer a selection from example codes. Setup replaces only `profiles.current`, preserves unrelated settings and other profiles, validates exact unambiguous memberships, and does not download content.
 

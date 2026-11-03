@@ -23,6 +23,10 @@ try {
   const bundle = path.join(temp, name);
   const app = path.join(bundle, 'lib', 'app');
   const runtime = path.join(bundle, 'lib', 'runtime', process.platform === 'win32' ? 'node.exe' : 'node');
+  assert.match(await fs.readFile(path.join(app, 'LICENSE'), 'utf8'), /MIT License[\s\S]*Jacob Corbett/);
+  assert.equal(JSON.parse(await fs.readFile(path.join(app, 'package.json'), 'utf8')).license, 'MIT');
+  await fs.access(path.join(app, 'SECURITY.md'));
+  await fs.access(path.join(app, 'CONTRIBUTING.md'));
   const state = path.join(temp, 'private-state');
   const env = { ...process.env, NODE_PATH: '', NODE_OPTIONS: '', MYAB_CONFIG: path.join(state, 'config.json'), MYAB_STATE_DIR: state, MYAB_DATABASE: path.join(state, 'archive.sqlite'), MYAB_PROFILE_DIR: path.join(state, 'profile'), MYAB_DOWNLOAD_DIR: path.join(state, 'downloads'), MYAB_VAULT: path.join(state, 'vault') };
   // Exercise the actual launcher, including extraction to a path containing spaces.
