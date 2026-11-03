@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { getConfig, prepareLocalState } from './config.js';
+import { getConfig, prepareLocalState, requireVault } from './config.js';
 import { BlackboardSession, AuthenticationRequiredError } from './browser.js';
 import { getAccountOverview, courseFromMembership, courseCode, selectCourses } from './api.js';
 import { ArchiveDatabase } from './database.js';
@@ -17,6 +17,8 @@ import { syncPanopto } from './panopto-sync.js';
 import { getRecordings, searchRecordings, transcriptText, recordingId } from './panopto-data.js';
 import { downloadRecording } from './panopto-download.js';
 
+import { setup } from './setup.js';
+
 let config, options, command, release, activeSession;
 const controller = new AbortController();
 const onSignal = signal => { controller.abort(new Error(`Cancelled by ${signal}.`)); process.exitCode = signal === 'SIGINT' ? 130 : 143; if (activeSession) activeSession.close().catch(() => {}); };
@@ -28,9 +30,18 @@ try {
   else if (command === 'paths') output(config);
   else if (command === 'version') console.log(JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
   else {
-    const mutates = ['login', 'panopto-login', 'panopto-sync', 'panopto-download', 'sync', 'check', 'download', 'refresh', 'repair', 'extract'].includes(command) || ['export', 'merge-vault'].includes(command) && !options.dryRun || command === 'relocate-files' && options.apply;
+    const mutates = ['setup', 'login', 'panopto-login', 'panopto-sync', 'panopto-download', 'sync', 'check', 'download', 'refresh', 'repair', 'extract'].includes(command) || ['export', 'merge-vault'].includes(command) && !options.dryRun || command === 'relocate-files' && options.apply;
     if (mutates) release = acquireLock(config.stateDir);
-    if (command === 'login') await login();
+    if (command === 'merge-vault') requireVault(config);
+    if (command === 'setup') {
+      const courses = await withSession(async session => {
+        const { memberships, terms } = await getAccountOverview(session);
+        const names = new Map(terms.map(t => [t.id, t.name]));
+        return memberships.map(courseFromMembership).filter(c => c?.id).map(c => ({ ...c, term_name: names.get(c.termId) }));
+      });
+      await setup(config, courses, options, { signal: controller.signal });
+    }
+    else if (command === 'login') await login();
     else if (command === 'panopto-login') await panoptoLogin();
     else if (['panopto-sync', 'panopto-download'].includes(command)) await runPanopto();
     else if (command === 'courses') await withSession(async session => {
@@ -72,7 +83,7 @@ async function localCommand() {
   const database = openDatabase(!writable);
   try {
     if (command === 'repair') {
-      const indexedFiles = fs.existsSync(path.join(config.vaultRoot, 'Uni')) ? repairLocalIndex(database, config) : 0;
+      const indexedFiles = config.vaultRoot && fs.existsSync(path.join(config.vaultRoot, 'Uni')) ? repairLocalIndex(database, config) : 0;
       output({ indexedFiles, backup: database.backupPath || null, integrity: database.db.prepare('PRAGMA quick_check').get().quick_check }); return;
     }
     const courses = selected(database.db.prepare('SELECT * FROM courses ORDER BY course_code').all());
@@ -161,6 +172,8 @@ function printHelp() {
 Network: login, courses, check (metadata), sync, refresh/download (metadata and files)
 Offline: brief/status, changes, show, extract, export, merge-vault, verify-files, relocate-files
 Panopto: panopto-login, panopto-sync, recordings, recording, transcript, panopto-download
+Getting started: login, setup (choose current courses), check --active
+Setup: [--course <exact-ID/code>] (repeatable) [--vault <path>] [--academic-start-year YYYY]
 Maintenance: doctor [--live], repair, paths, version
 
 Select: --course <ID/code/name> (repeatable), --term <name>, --profile <name>, --active, --all

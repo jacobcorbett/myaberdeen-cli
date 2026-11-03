@@ -1,0 +1,63 @@
+# Contributing
+
+Please open an issue before starting a change. Describe the problem or proposal so Jacob can agree the scope before you spend time implementing it. Bug reports should include the CLI version (`myab version`), operating system, a redacted command and error, and the expected behaviour.
+
+## Fork and pull request workflow
+
+This repository is private; you need an invitation to view it and fork it. Keep your fork and any copies private. Only Jacob (`jacobcorbett`) can change branches or tags in the upstream repository, including merging pull requests. Contributors should work in their own fork, not push branches here.
+
+1. Open an issue and discuss the change with Jacob.
+2. Use GitHub's **Fork** button to create your private fork.
+3. Clone your fork and add the upstream repository. Replace `YOUR_USERNAME` below with your GitHub username:
+
+   ```sh
+   git clone https://github.com/YOUR_USERNAME/myaberdeen-cli.git
+   cd myaberdeen-cli
+   git remote add upstream https://github.com/jacobcorbett/myaberdeen-cli.git
+   git fetch upstream
+   git switch -c fix/describe-the-change upstream/main
+   npm ci
+   ```
+
+4. Make a focused change and add meaningful regression tests where appropriate. Keep the README and `skills/myaberdeen-cli/SKILL.md` aligned with any command or setup changes.
+5. Run the checks below and review your complete diff for accidental files and personal data.
+6. Commit and push to **your fork**:
+
+   ```sh
+   git add path/to/changed-file
+   git commit -m "fix: describe the change"
+   git push -u origin fix/describe-the-change
+   ```
+
+7. Open a pull request from your fork's branch to `jacobcorbett/myaberdeen-cli:main`. Link the issue, explain the resulting behaviour, list the checks you ran and call out any limitations. Jacob reviews and merges accepted changes; approval alone does not grant you merge access.
+
+Use concise commit prefixes such as `feat:`, `fix:`, `docs:`, `chore:` or `refactor:`. Keep unrelated changes in separate PRs. Do not change the version, create upstream release tags or publish release assets as part of a contribution unless Jacob asks.
+
+## Local checks
+
+Development requires Git, npm and Node 22.13+ on the 22 branch, or Node 24+; Node 23 is unsupported. Google Chrome is needed for live sign-in, but the automated tests use synthetic data and mocked services and need no university account.
+
+```sh
+npm ci
+npm run check
+git diff --check
+```
+
+For packaging or launcher changes, also build and test an extracted portable package:
+
+```sh
+npm run build:release
+npm run smoke:release
+```
+
+These packaging checks run on your current OS/CPU and download the official Node runtime. A passing local check does not prove that live university login, other operating systems or recording discovery work. State exactly what you tested.
+
+## Privacy and scope
+
+- Keep credentials, cookies, browser profiles, authentication headers, account identifiers, personal configuration, SQLite databases/backups and downloaded course materials out of commits, issues, PRs and shared logs. Use synthetic fixtures instead of real grades, messages or transcripts.
+- Inspect diagnostics before sharing them: paths, course membership and error details can reveal personal information. Never paste raw browser/network captures or your local archive.
+- Blackboard access stays read-only: no submission, messaging, enrolment or assessment-attempt operations. Respect authentication, course permissions and download controls; do not add bypasses or broad account crawls.
+- Obsidian integration is optional. Do not add a contributor's personal paths, course selection or academic start year as defaults.
+- If you discover an exposed credential or security problem, contact Jacob privately first. Do not put the secret or a working exploit in an issue; revoke any exposed credential promptly.
+
+Read [AGENTS.md](AGENTS.md) for the repository's development guidance and the [README](README.md) for setup and supported behaviour. AI-assisted contributions are welcome under the same review, privacy and testing requirements; you remain responsible for understanding the change.

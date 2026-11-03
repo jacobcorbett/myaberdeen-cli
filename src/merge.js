@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { requireVault } from './config.js';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -8,8 +9,7 @@ import { getRecordings } from './panopto-data.js';
 import { baseCourseCode, courseDirectories as findCourseDirectories, resolveCourseDirectory } from './course-paths.js';
 
 export function mergeVault(database, config, { deduplicate = true, courseIds, dryRun = false } = {}) {
-  const uniRoot = path.join(config.vaultRoot, 'Uni');
-  if (!fs.existsSync(uniRoot)) throw new Error(`University vault not found at ${uniRoot}`);
+  const uniRoot = requireVault(config);
   const courseDirectories = findCourseDirectories(uniRoot);
   validateDestinations(database, config, courseDirectories, courseIds);
   if (dryRun) return previewMerge(database, config, courseDirectories, courseIds, deduplicate);
@@ -241,7 +241,8 @@ function previewMerge(database, config, directories, courseIds, deduplicate) {
   return { dryRun: true, courses: courses.map(course => ({ id: course.id, directory: resolveCourseDirectory(course, config, directories), notes: ['Index', 'Content', 'Files', 'Recordings', 'Announcements', 'Gradebook', 'Messages', 'Discussions', 'Schedule'].map(n => n + '.md') })), duplicateRemovals: [...new Set(removals)] };
 }
 export function repairLocalIndex(database, config) {
-  const root = path.join(config.vaultRoot, 'Uni');
+  if (!config.vaultRoot) return 0;
+  const root = requireVault(config);
   return indexVaultFiles(database, root, findCourseDirectories(root));
 }
 

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { constants } from 'node:fs';
 import { fileMatches } from './io.js';
 import { getRecordings, searchRecordings, hasPanopto } from './panopto-data.js';
 
@@ -62,8 +63,34 @@ export function applyRelocation(database, result) {
   } catch (error) { database.db.exec('ROLLBACK'); throw error; }
   return result.plan.length;
 }
+function executableFound(command, env = process.env) {
+  const extensions = process.platform === 'win32' ? ['', ...(env.PATHEXT || '.EXE;.CMD;.BAT').split(';')] : [''];
+  const roots = path.isAbsolute(command) || command.includes('/') || command.includes('\\') ? [''] : (env.PATH || '').split(path.delimiter);
+  return roots.some(root => extensions.some(extension => {
+    try {
+      const target = root ? path.join(root, command + extension) : command + extension;
+      if (!fs.statSync(target).isFile()) return false;
+      fs.accessSync(target, process.platform === 'win32' ? constants.F_OK : constants.X_OK); return true;
+    } catch { return false; }
+  }));
+}
 export function localDoctor(config) {
-  return { node: process.version, platform: process.platform, chromeFound: fs.existsSync(config.chromePath),
+  const configFound = fs.existsSync(config.configPath);
+  const current = config.profiles?.current;
+  const currentCoursesConfigured = Array.isArray(current) && current.length > 0 && current.every(c => typeof c === 'string' && c.trim());
+  const chromeFound = executableFound(config.chromePath);
+  const extractionTools = { pdftotext: executableFound(config.pdftotext || 'pdftotext'), unzip: executableFound('unzip') };
+  const vaultConfigured = !!config.vaultRoot;
+  const vaultFound = vaultConfigured && fs.existsSync(path.join(config.vaultRoot, 'Uni')) && fs.statSync(path.join(config.vaultRoot, 'Uni')).isDirectory();
+  const suggestions = [];
+  if (!chromeFound) suggestions.push('Install Google Chrome or set MYAB_CHROME to its executable path.');
+  if (!configFound || !currentCoursesConfigured) suggestions.push('Run myab login, then myab setup to create configuration and choose current courses.');
+  if (!fs.existsSync(config.databasePath)) suggestions.push('After setup, run myab check --active to create your local archive.');
+  if (vaultConfigured && !vaultFound) suggestions.push('Obsidian vault is unavailable: mount it or configure a vault containing Uni with myab setup --vault <path>.');
+  if (!extractionTools.pdftotext) suggestions.push('Optional PDF extraction: install Poppler (macOS: brew install poppler; Debian/Ubuntu: sudo apt install poppler-utils; Windows: install Poppler and add its bin directory to PATH).');
+  if (!extractionTools.unzip) suggestions.push('Optional Office extraction: install unzip (macOS: brew install unzip; Debian/Ubuntu: sudo apt install unzip; Windows: install an unzip.exe utility and add it to PATH).');
+  return { node: process.version, platform: process.platform, chromeFound, configFound, currentCoursesConfigured,
+    vaultConfigured, vaultFound, extractionTools, suggestions,
     databaseFound: fs.existsSync(config.databasePath), profileLocked: fs.existsSync(path.join(config.profileDir, 'SingletonLock')) || (() => { try { fs.lstatSync(path.join(config.profileDir, 'SingletonLock')); return true; } catch { return false; } })(),
     operationLocked: fs.existsSync(path.join(config.stateDir, 'operation.lock')), lockRecoveryPending: fs.existsSync(path.join(config.stateDir, 'operation.lock.recovery')), configPath: config.configPath };
 }

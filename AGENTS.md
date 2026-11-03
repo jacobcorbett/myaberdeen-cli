@@ -9,7 +9,7 @@ Do not add personal paths, credentials or real course data to it.
 
 ## Purpose
 
-This is Jacob's local, terminal-native MyAberdeen archive client. It uses a dedicated persistent Chrome profile so normal operations can run headlessly after an interactive university login.
+This is a terminal-native MyAberdeen archive client for University of Aberdeen users. It uses a dedicated persistent Chrome profile so normal operations can run headlessly after an interactive university login.
 
 ## Safety and scope
 
@@ -20,6 +20,8 @@ This is Jacob's local, terminal-native MyAberdeen archive client. It uses a dedi
 - External LTI services are separate systems. Panopto reads use the normal user browser sign-in and course-scoped commands; other services such as Turnitin remain links. Never bypass authentication, folder permissions or download controls.
 
 ## Workflow
+
+- Read `CONTRIBUTING.md` before preparing a contribution. Contributors use a private fork and PR; only Jacob changes upstream branches/tags or merges PRs.
 
 - Keep the CLI usable without a visible browser except for initial or expired login.
 - Use the installed Google Chrome through `playwright-core`; do not download a second browser unless explicitly requested.
@@ -39,7 +41,7 @@ This is Jacob's local, terminal-native MyAberdeen archive client. It uses a dedi
 
 - Start ordinary course questions with `myab brief --active --json`, then `show` or the returned local sources. Check section freshness before presenting cached facts as current.
 - Use `myab check --active` for metadata, or `myab refresh --active` for metadata and conditional file checks. An explicit live request takes priority over the cache.
-- Configure `profiles.current` locally. Do not select every membership for a routine refresh; broad archive operations require explicit `--all`.
+- Use `myab setup` to configure `profiles.current` locally. Obsidian integration is optional and requires an explicit user-selected vault; never infer a personal vault path or academic start year. Do not select every membership for a routine refresh; broad archive operations require explicit `--all`.
 - Preserve full archived details on incomplete refresh. Mark absence only after a successful complete section traversal.
 - Keep caller-specific change cursors. Text caches are keyed by file SHA-256 and extractor version.
 - Preview vault merge and relocation changes. Relocation must verify destination hashes and must never delete source files.

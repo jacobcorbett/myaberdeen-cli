@@ -2,6 +2,18 @@
 
 A private, read-only terminal client for the University of Aberdeen's Blackboard Learn site. It reuses a dedicated Chrome profile after interactive sign-in, archives course data in SQLite, and keeps ordinary Blackboard files locally. Normal lookups can use the archive without opening Chrome.
 
+## Start here
+
+Version **0.3.1** adds guided course setup and optional Obsidian integration.
+
+1. Download and extract the package for your computer from [Releases](https://github.com/jacobcorbett/myaberdeen-cli/releases/latest), or install from source below. Google Chrome is required.
+2. Run `myab login` and complete your own university sign-in/MFA.
+3. Run `myab setup`, select your current courses by number, and leave the optional vault path blank if you do not use Obsidian.
+4. Run `myab check --active` for your first metadata archive. Use `myab refresh --active` when you also want course files downloaded.
+5. Run `myab brief --active` to read the archive, or `myab doctor` for setup checks and suggested fixes.
+
+Here `myab` means your installed command. From a portable download folder, use `./myab` on macOS/Linux or `.\myab.cmd` on Windows instead. Setup saves only your course selection and settings locally; it does not download course content. Each user signs into their own account. Do not share browser profiles or private archives.
+
 ## Download a portable release
 
 Download the archive for your computer from [GitHub Releases](https://github.com/jacobcorbett/myaberdeen-cli/releases/latest). Access is required while this repository is private.
@@ -15,7 +27,7 @@ Download the archive for your computer from [GitHub Releases](https://github.com
 
 These are portable folders containing a launcher, the official Node runtime, and locked production dependencies. **No separate Node or npm installation is needed.** Extract the whole archive and keep `lib/` beside the launcher. Run it from a terminal; this is a CLI, not a desktop app. Add the extracted folder to `PATH` to use `myab` elsewhere. Do not move or symlink just the launcher.
 
-Google Chrome is still required. Start with `myab login`, complete sign-in/MFA yourself, then run `myab doctor --live`. Follow the course configuration section below; the example configuration and AI skill are under `lib/app/`. Optional text extractors still need to be installed separately.
+Google Chrome is still required. Start with `myab login`, complete sign-in/MFA yourself, then run `myab doctor --live`. Run `myab setup` to select your courses; the example configuration and AI skill are under `lib/app/`. Optional text extractors still need to be installed separately.
 
 Each archive has a `.sha256` checksum. On macOS use `shasum -a 256 -c ARCHIVE.sha256`; on Linux use `sha256sum -c ARCHIVE.sha256`. On Windows compare `Get-FileHash ARCHIVE.zip -Algorithm SHA256` with the supplied checksum. `BUILD.json` records the version, source commit, runtime and architecture.
 
@@ -34,6 +46,7 @@ npm ci
 npm link
 myab login
 myab doctor --live
+myab setup
 ```
 
 Complete Aberdeen's normal password/MFA flow yourself. If Microsoft offers **Stay signed in?**, choose **Yes**. The CLI can reuse remembered SSO when the Blackboard session expires; it cannot override university expiry or MFA requirements. Authentication state stays inside the private Chrome profile.
@@ -66,7 +79,15 @@ Preserve local edits and pinned/forked installations instead of resetting them. 
 
 ## Select current courses explicitly
 
-Copy `config.example.json` to `~/.local/share/myaberdeen-cli/config.json` and replace the example course codes. The configuration is local and should not be committed. `profiles.current` is an allowlist used by `--active`. Academic start year, merged-course aliases and explicit course-to-vault directories are configurable.
+Run `myab setup` after login. It lists your memberships with their terms, lets you select courses by number, and saves exact course IDs to the local `profiles.current` allowlist used by `--active`. Existing custom settings and other profiles are preserved; the current selection is replaced. Blank course input cancels without saving. No courses are selected automatically, including old memberships.
+
+For an AI assistant or another non-interactive caller, first use `myab courses --json`, then pass exact IDs/codes explicitly:
+
+```sh
+myab setup --course YOUR_COURSE_ID --course ANOTHER_COURSE_ID
+```
+
+`myab paths` shows the local configuration file (normally `~/.local/share/myaberdeen-cli/config.json`). Manual configuration remains supported with `config.example.json`; replace its placeholder courses. Configuration is private and should not be committed. The example deliberately omits `academicStartYear`: vault folders default to academic years such as `2026-27`. If you want “Year 1”, “Year 2”, etc., set your own start year with `myab setup --course YOUR_COURSE_ID --academic-start-year YYYY`. Existing start-year settings are preserved unless explicitly changed.
 
 ```sh
 myab courses
@@ -149,6 +170,14 @@ Refreshes are on demand unless a background schedule is separately configured. T
 
 ## Exports and Obsidian
 
+Obsidian is optional. There is no default vault path, and ordinary archive, download and export commands do not require a vault. To enable integration, provide your own vault containing a `Uni` directory, either during guided `myab setup`, through `vaultRoot` in your local config, or through `MYAB_VAULT`. For example:
+
+```sh
+myab setup --course YOUR_COURSE_ID --vault "/path/to/your/vault"
+```
+
+The `--course` selection replaces your current profile; include every course you want in `--active`, or use guided setup. `merge-vault` refuses to run without an explicit, available vault. `repair` skips vault indexing when no vault is configured. Users upgrading from older versions who relied on the implicit vault path must configure it explicitly.
+
 ```sh
 myab export --active
 myab merge-vault --active --dry-run
@@ -212,3 +241,7 @@ The build targets the current OS/CPU and downloads the matching official Node di
 The Release workflow runs tests, builds and smoke-checks each archive on its native platform, and publishes the release with all downloads/checksums only when every build succeeds. Publishing a release through GitHub's UI also triggers builds; assets appear after successful checks. Manual publishing requires an existing `vX.Y.Z` tag matching the package version. GitHub's source archives and the normal source-install route remain available.
 
 Release jobs use Node 24. Platform checks run on macOS ARM64, macOS Intel, Linux x64 and Windows x64. Live authentication is deliberately excluded from CI. A rerun can replace assets for the same tag; `BUILD.json` records the exact runtime and commit used.
+
+## Contributing
+
+Open an issue first, then work in a private fork and submit a pull request for Jacob to review and merge. Upstream branches and tags are owner-only. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, local checks and privacy requirements.

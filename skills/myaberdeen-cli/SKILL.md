@@ -39,7 +39,11 @@ If GitHub requires authentication, use the user's existing GitHub access; never 
 
 `myab login` opens the dedicated Chrome profile. Let the user complete SSO/MFA; choosing “Stay signed in” allows remembered SSO. Normal live reads then run headlessly. Do not install an extra Playwright browser: this project uses `playwright-core` and installed Chrome. `MYAB_CHROME` can override its executable.
 
-Use `myab paths` to locate the configuration file. Copy the checkout's `config.example.json` there only if no configuration exists, then replace example values with the user's course selection and academic start year. Preserve existing settings. `profiles.current` must be a nonempty allowlist for `--active`. Use `myab courses --json` to discover exact current course IDs/codes; do not assume example codes or years are current.
+After login, use `myab setup` in a terminal to choose current courses. For an agent without an interactive terminal, read `myab courses --json` and run `myab setup --course EXACT_ID_OR_CODE` with one repeated flag per chosen course. Never infer a selection from example codes. Setup replaces only `profiles.current`, preserves unrelated settings and other profiles, validates exact unambiguous memberships, and does not download content.
+
+Use `myab paths` to locate the local configuration. Manual JSON configuration remains supported; preserve existing settings. No academic start year is assumed: vault folders default to academic-year labels. Only set `academicStartYear` (or `setup --academic-start-year YYYY`) when the user wants relative “Year N” folders and their actual start year is known.
+
+Obsidian is optional and has no default vault path. Normal archive commands work without it. Only configure `vaultRoot`/`MYAB_VAULT` when integration is requested; the selected vault must contain `Uni`. Guided setup offers an optional path, or pass `--vault PATH` alongside the complete `--course` selection. Existing users who relied on the old implicit vault path must configure it explicitly. `merge-vault` fails without a configured vault; `repair` skips vault indexing if none is configured. `myab doctor` reports configuration, current-course selection, vault availability and optional extraction tools with suggested fixes.
 
 ## Answer course questions
 

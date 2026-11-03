@@ -1,5 +1,6 @@
 const COMMON = ['course', 'term', 'profile', 'active', 'all', 'json'];
 const ALLOWED = {
+  setup: ['course', 'vault', 'academic-start-year'],
   login: [], paths: [], help: [], version: [],
   'panopto-login': [],
   'panopto-sync': [...COMMON, 'headed', 'limit-recordings', 'folder', 'dry-run'],
@@ -18,7 +19,7 @@ const ALLOWED = {
   doctor: ['live', 'json', 'headed'], 'verify-files': COMMON,
   'relocate-files': [...COMMON, 'from', 'to', 'apply'], repair: ['json']
 };
-const VALUES = new Set(['course', 'term', 'profile', 'limit-courses', 'limit-files', 'since', 'limit', 'id', 'from', 'to', 'resume', 'folder', 'limit-recordings', 'search', 'language', 'format', 'max-bytes']);
+const VALUES = new Set(['course', 'term', 'profile', 'limit-courses', 'limit-files', 'since', 'limit', 'id', 'from', 'to', 'resume', 'folder', 'limit-recordings', 'search', 'language', 'format', 'max-bytes', 'vault', 'academic-start-year']);
 export function parseArgs(args) {
   if (args.length === 1 && args[0] === '--version') return { command: 'version', options: {} };
   if (!args.length || args.includes('-h') || args.includes('--help')) return { command: 'help', options: {} };
@@ -36,6 +37,10 @@ export function parseArgs(args) {
   for (const key of ['limitCourses', 'limitFiles', 'limit', 'resume', 'limitRecordings', 'maxBytes']) if (options[key] !== undefined) {
     options[key] = Number(options[key]); if (!Number.isSafeInteger(options[key]) || options[key] < 1) throw new Error(`${key} must be a positive integer.`);
   }
+  if (options.academicStartYear !== undefined) {
+    options.academicStartYear = Number(options.academicStartYear);
+    if (!Number.isInteger(options.academicStartYear) || options.academicStartYear < 1900 || options.academicStartYear > 9999) throw new Error('--academic-start-year must be a four-digit year.');
+  }
   if (options.active) { if (options.profile) throw new Error('Choose --active or --profile.'); options.profile = 'current'; }
   if (options.all && (options.course || options.term || options.profile)) throw new Error('--all cannot be combined with a narrower selection.');
   if (options.resume && (options.course || options.term || options.profile || options.all)) throw new Error('--resume uses the original bounded selection.');
@@ -50,7 +55,7 @@ export function parseArgs(args) {
 }
 export function courseQueries(config, options) {
   const profile = options.profile ? config.profiles?.[options.profile] : null;
-  if (options.profile && (!Array.isArray(profile) || !profile.length || profile.some(x => typeof x !== 'string' || !x.trim()))) throw new Error(`Profile “${options.profile}” needs a nonempty course allowlist in ${config.configPath}.`);
+  if (options.profile && (!Array.isArray(profile) || !profile.length || profile.some(x => typeof x !== 'string' || !x.trim()))) throw new Error(`Profile “${options.profile}” needs a nonempty course allowlist in ${config.configPath}. Run: myab setup`);
   if (profile && options.course) throw new Error('Choose a profile or individual courses.');
   return profile || options.course || null;
 }

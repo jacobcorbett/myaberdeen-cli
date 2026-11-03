@@ -20,7 +20,9 @@ export function getConfig(env = process.env) {
   const downloadDir = expandHome(env.MYAB_DOWNLOAD_DIR || '~/Documents/MyAberdeen');
   const candidates = process.platform === 'darwin' ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'] : process.platform === 'win32' ? [path.join(env.PROGRAMFILES || 'C:\\Program Files', 'Google/Chrome/Application/chrome.exe')] : ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable'];
   const chromePath = expandHome(env.MYAB_CHROME || candidates.find(p => fs.existsSync(p)) || candidates[0]);
-  const vaultRoot = expandHome(env.MYAB_VAULT || settings.vaultRoot || '~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Main');
+  const vault = env.MYAB_VAULT || settings.vaultRoot;
+  if (vault !== undefined && (typeof vault !== 'string' || !vault.trim())) throw new Error('vaultRoot must be a nonempty path.');
+  const vaultRoot = vault ? expandHome(vault) : null;
   return { ...settings, stateDir, profileDir, databasePath, downloadDir, chromePath, vaultRoot, configPath, baseUrl: BASE_URL };
 }
 export function ensurePrivateDirectory(directory) {
@@ -34,4 +36,11 @@ function expandHome(value) {
   if (value === '~') return os.homedir();
   if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2));
   return path.resolve(value);
+}
+
+export function requireVault(config) {
+  if (!config.vaultRoot) throw new Error('Obsidian integration is optional. Configure vaultRoot with myab setup --vault <path> or set MYAB_VAULT before using merge-vault.');
+  const root = path.join(config.vaultRoot, 'Uni');
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw new Error(`University vault directory not found: ${root}. Choose a vault containing a Uni directory.`);
+  return root;
 }
