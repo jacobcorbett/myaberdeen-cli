@@ -1,10 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { atomicWrite, throwIfAborted } from './io.js';
-import { courseCode } from './api.js';
-import { requireVault } from './config.js';
+import { courseCode, normaliseAvailability } from './api.js';
+import { requireVault, expandHome } from './config.js';
 
 export async function setup(config, courses, options = {}, { ask, log = console.log, signal } = {}) {
   if (!courses.length) throw new Error('No course memberships were returned. No configuration was changed.');
@@ -23,13 +22,18 @@ export async function setup(config, courses, options = {}, { ask, log = console.
     let selected;
     if (interactive) {
       log('Choose the courses to include in --active. Memberships may include old courses; check the term.');
-      courses.forEach((c, i) => log(`${i + 1}. ${courseCode(c)} — ${c.name || ''} (${c.term_name || 'term unknown'})${c.isAvailable === false ? ' [unavailable]' : ''}`));
+      courses.forEach((c, i) => log(`${i + 1}. ${courseCode(c)} — ${c.name || ''} (${c.term_name || 'term unknown'})${normaliseAvailability(c) === 0 ? ' [unavailable]' : ''}`));
       if (Array.isArray(settings.profiles?.current)) log(`Current selection: ${settings.profiles.current.join(', ')}`);
-      const answer = (await ask('Course numbers, separated by commas (blank cancels): ')).trim();
-      if (!answer) { log('Setup cancelled; configuration unchanged.'); return; }
-      const entries = answer.split(/[\s,]+/);
-      if (entries.some(n => !/^\d+$/.test(n) || Number(n) < 1 || Number(n) > courses.length)) throw new Error('Choose numbers from the course list. No configuration was changed.');
-      selected = entries.map(n => courses[Number(n) - 1]);
+      while (!selected) {
+        const answer = await ask('Course numbers, separated by commas (blank cancels): ');
+        if (typeof answer !== 'string') throw new Error('Setup input ended; configuration unchanged.');
+        if (!answer.trim()) { log('Setup cancelled; configuration unchanged.'); return; }
+        const entries = answer.trim().split(/[\s,]+/).filter(Boolean);
+        if (!entries.length || entries.some(n => !/^\d+$/.test(n) || Number(n) < 1 || Number(n) > courses.length)) {
+          log('Choose numbers from the course list, or leave blank to cancel.'); continue;
+        }
+        selected = entries.map(n => courses[Number(n) - 1]);
+      }
     } else {
       selected = options.course.map(query => {
         if (!query.trim()) throw new Error('A course ID/code cannot be empty. No configuration was changed.');
@@ -39,11 +43,21 @@ export async function setup(config, courses, options = {}, { ask, log = console.
       });
     }
     let vault = options.vault;
-    if (interactive && vault === undefined) vault = (await ask('Optional Obsidian vault path (must contain Uni; blank keeps the existing setting or skips): ')).trim() || undefined;
-    if (vault !== undefined) {
-      const expanded = vault === '~' ? os.homedir() : vault.startsWith('~/') ? path.join(os.homedir(), vault.slice(2)) : path.resolve(vault);
-      requireVault({ vaultRoot: expanded });
-      settings.vaultRoot = expanded;
+    while (true) {
+      if (interactive && vault === undefined) {
+        const answer = await ask('Optional Obsidian vault path (must contain Uni; blank keeps the existing setting or skips): ');
+        if (typeof answer !== 'string') throw new Error('Setup input ended; configuration unchanged.');
+        vault = answer.trim() || undefined;
+      }
+      if (vault === undefined) break;
+      try {
+        const expanded = normaliseInputPath(vault);
+        requireVault({ vaultRoot: expanded });
+        settings.vaultRoot = expanded; break;
+      } catch (error) {
+        if (!interactive || options.vault !== undefined) throw error;
+        log(error.message); vault = undefined;
+      }
     }
     if (options.academicStartYear !== undefined) settings.academicStartYear = options.academicStartYear;
     settings.profiles = { ...settings.profiles, current: [...new Set(selected.map(c => c.id))] };
@@ -55,4 +69,12 @@ export async function setup(config, courses, options = {}, { ask, log = console.
     log('Next: myab check --active (metadata), then myab refresh --active (downloads too).');
     if (!settings.vaultRoot && !config.vaultRoot) log('Obsidian integration is disabled. Normal archive commands work without a vault.');
   } finally { reader?.close(); }
+}
+
+export function normaliseInputPath(value, platform = process.platform) {
+  let input = value.trim();
+  if ((input.startsWith('"') && input.endsWith('"')) || (input.startsWith("'") && input.endsWith("'"))) input = input.slice(1, -1);
+  if (platform !== 'win32') input = input.replace(/\\([ ()&'"])/g, '$1');
+  if (!input.trim()) throw new Error('Choose a nonempty path.');
+  return expandHome(input);
 }

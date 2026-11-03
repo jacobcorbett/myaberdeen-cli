@@ -14,6 +14,10 @@ export async function syncArchive({ session, database, config, courseQuery, sele
     const termNames = new Map(terms.map(term => [term.id, term.name || term.id]));
     courses = selectCourses(memberships, selectedIds || courseQuery);
     if (limitCourses) courses = courses.slice(0, limitCourses);
+    if (downloadFiles && limitFiles && !resumeFrom) {
+      const lastAttempts = new Map(database.db.prepare('SELECT course_id,MAX(run_id) last_run FROM file_checks GROUP BY course_id').all().map(r => [r.course_id, r.last_run]));
+      courses.sort((a, b) => (lastAttempts.get(a.id) || 0) - (lastAttempts.get(b.id) || 0));
+    }
     stats.selected = courses.length;
     database.setScope(runId, courses, { downloadFiles, deep, limitFiles: limitFiles || null });
     onProgress(`Selected ${courses.length}: ${courses.map(c => `${courseCode(c)} — ${c.name || ''}`).join('; ')}`);
@@ -27,8 +31,10 @@ export async function syncArchive({ session, database, config, courseQuery, sele
         fatal(error, signal);
         database.upsertCourse(membership, termNames.get(membership.termId));
         database.recordSyncError(runId, membership.id, 'course', error);
-        database.courseResult(runId, membership.id, 'inaccessible'); stats.inaccessible++;
-        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions']) database.finishSection(runId, membership.id, section, 'unavailable');
+        const unavailable = [403, 404].includes(error.status);
+        database.courseResult(runId, membership.id, unavailable ? 'inaccessible' : 'partial');
+        if (unavailable) stats.inaccessible++;
+        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions']) database.finishSection(runId, membership.id, section, unavailable ? 'unavailable' : 'partial');
         onProgress(`Could not access ${courseCode(membership)}: ${safeMessage(error)}`);
         continue;
       }
@@ -60,7 +66,12 @@ export async function syncArchive({ session, database, config, courseQuery, sele
         database.sections(course.id).find(s => s.section === 'content')?.status !== 'completed');
       const deferredBefore = stats.deferredFiles;
       if (downloadFiles) await section(context, 'files', async () => {
-        const candidates = database.db.prepare('SELECT f.* FROM file_candidates f JOIN record_state r ON r.dataset=\'file_candidates\' AND r.course_id=f.course_id AND r.record_id=f.content_id WHERE f.course_id=? AND r.last_seen_run=?').all(course.id, runId);
+        const candidates = database.db.prepare(`SELECT c.* FROM file_candidates c
+          JOIN record_state r ON r.dataset='file_candidates' AND r.course_id=c.course_id AND r.record_id=c.content_id
+          LEFT JOIN files f ON f.course_id=c.course_id AND f.content_id=c.content_id
+          LEFT JOIN (SELECT course_id,content_id,MAX(run_id) last_run FROM file_checks GROUP BY course_id,content_id) checks ON checks.course_id=c.course_id AND checks.content_id=c.content_id
+          WHERE c.course_id=? AND r.last_seen_run=?
+          ORDER BY COALESCE(checks.last_run,0), CASE WHEN f.sha256 IS NULL OR f.local_path IS NULL THEN 0 ELSE 1 END, COALESCE(f.checked_at,''), c.content_id`).all(course.id, runId);
         const completed = new Set(resumeFrom ? database.db.prepare("SELECT content_id FROM file_checks WHERE run_id=? AND course_id=? AND status='completed'").all(resumeFrom, course.id).map(row => row.content_id) : []);
         for (const candidate of candidates) {
           throwIfAborted(signal);

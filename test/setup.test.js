@@ -55,7 +55,8 @@ test('cancelled or invalid guided setup leaves existing configuration byte-for-b
   const { config } = fixture(t);
   const before = '{"profiles":{"current":["keep"]}}\n'; fs.writeFileSync(config.configPath, before);
   await setup(config, courses, {}, { ...quiet, ask: async () => '' });
-  await assert.rejects(setup(config, courses, {}, { ...quiet, ask: async () => '999' }), /Choose numbers/);
+  const invalidThenCancel = ['999', ''];
+  await setup(config, courses, {}, { ...quiet, ask: async () => invalidThenCancel.shift() });
   await assert.rejects(setup(config, courses, { course: ['CS1000_27'], vault: '/missing-vault' }, quiet), /vault directory not found/);
   await assert.rejects(setup(config, courses, { course: ['CS'] }, quiet), /exactly one/);
   assert.equal(fs.readFileSync(config.configPath, 'utf8'), before);

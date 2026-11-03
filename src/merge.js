@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { parseFragment } from 'parse5';
 import { requireVault } from './config.js';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -103,9 +104,9 @@ function writeCourseIntegration(database, config, course, directory) {
   const rawDirectory = path.join(config.downloadDir, safeFilename(course.term_name || 'No term'), safeFilename(course.course_code));
   writeMarkdown(path.join(target, 'Index.md'), [
     frontmatter('uni', course.course_code),
-    `# ${course.name} — MyAberdeen archive`, '',
+    `# ${escapeMarkdown(course.name)} — MyAberdeen archive`, '',
     `- Blackboard course ID: \`${course.id}\``,
-    `- Term: ${course.term_name || 'No term'}`,
+    `- Term: ${escapeMarkdown(course.term_name || 'No term')}`,
     `- Raw archive: [Open folder](${fileLink(rawDirectory)})`,
     `- SQLite: \`${config.databasePath}\``, '',
     '## Offline sections', '',
@@ -125,7 +126,7 @@ function writeCourseIntegration(database, config, course, directory) {
     ...recordings.flatMap(record => [`## ${escapeMarkdown(record.title)}`, '',
       `[Watch](${record.url}) · [Offline transcript](${fileLink(path.join(rawDirectory, 'recordings', record.id, 'README.md'))})`, '',
       `Duration: ${Math.round(record.duration)} seconds. Caption languages: ${Object.keys(record.transcripts || {}).join(', ') || 'none'}. Visibility: ${record.presence}.`, '',
-      record.aiSummary ? `AI-generated summary: ${record.aiSummary}` : '', ''])]);
+      record.aiSummary ? `AI-generated summary: ${escapeMarkdown(record.aiSummary)}` : '', ''])]);
   writeMarkdown(path.join(target, 'Announcements.md'), renderAnnouncements(course, announcements));
   writeMarkdown(path.join(target, 'Gradebook.md'), renderGrades(course, grades));
   writeMarkdown(path.join(target, 'Messages.md'), renderMessages(course, messages));
@@ -148,7 +149,7 @@ function renderAnnouncements(course, rows) {
   const lines = [frontmatter('uni', course.course_code), `# ${course.course_code} announcements`, ''];
   for (const row of rows) {
     const data = parseJson(row.json);
-    lines.push(`## ${row.title || 'Untitled announcement'}`, '', row.created_at ? `Posted: ${row.created_at}` : '', '', bodyText(data), '');
+    lines.push(`## ${escapeMarkdown(row.title || 'Untitled announcement')}`, '', row.created_at ? `Posted: ${row.created_at}` : '', '', bodyText(data), '');
   }
   return lines;
 }
@@ -162,7 +163,7 @@ function renderGrades(course, rows) {
 function renderMessages(course, rows) {
   const lines = [frontmatter('uni', course.course_code), `# ${course.course_code} messages`, ''];
   for (const row of rows) {
-    const data=parseJson(row.json); lines.push(`## ${row.posted_at || row.id}`, '', `Sender: ${data.sender?.displayName || row.sender_id || 'Unknown'}`, '', bodyText(data), '');
+    const data=parseJson(row.json); lines.push(`## ${row.posted_at || row.id}`, '', `Sender: ${escapeMarkdown(data.sender?.displayName || row.sender_id || 'Unknown')}`, '', bodyText(data), '');
   }
   return lines;
 }
@@ -170,7 +171,7 @@ function renderMessages(course, rows) {
 function renderDiscussions(course, rows) {
   const lines = [frontmatter('uni', course.course_code), `# ${course.course_code} discussions`, ''];
   for (const row of rows) {
-    const data=parseJson(row.json); lines.push(`## ${row.subject || row.posted_at || row.id}`, '', row.posted_at ? `Posted: ${row.posted_at}` : '', '', bodyText(data), '');
+    const data=parseJson(row.json); lines.push(`## ${escapeMarkdown(row.subject || row.posted_at || row.id)}`, '', row.posted_at ? `Posted: ${row.posted_at}` : '', '', bodyText(data), '');
   }
   return lines;
 }
@@ -186,7 +187,7 @@ function connectMainNote(directory, code, name) {
   let main = candidates.includes(exact) ? exact : candidates.filter(file => file.startsWith(code)).sort((a,b) => a.length - b.length)[0];
   if (!main) {
     main = `${safeFilename(code)} - ${safeFilename(cleanCourseName(name, code))}.md`;
-    writeMarkdown(path.join(directory, main), [`# ${name}`, '']);
+    writeMarkdown(path.join(directory, main), [`# ${escapeMarkdown(name)}`, '']);
   }
   const generatedBlock = '\n## MyAberdeen archive\n\n- [Offline course archive](MyAberdeen/Index.md)\n';
   for (const candidate of candidates) {
@@ -208,12 +209,21 @@ function frontmatter(type, courseCode) {
 
 function bodyText(data) {
   const value = data?.body?.rawText || data?.body?.displayText || data?.message || data?.description || '';
-  return stripHtml(String(value)) || '_No text body._';
+  return escapeMarkdown(stripHtml(String(value))) || '_No text body._';
 }
 
 function stripHtml(value) {
-  return value.replace(/<br\s*\/?\s*>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
+  const parts = [];
+  const block = new Set(['p', 'div', 'li', 'tr', 'h1', 'h2', 'h3', 'h4', 'blockquote', 'pre']);
+  const walk = node => {
+    if (['script', 'style'].includes(node.tagName)) return;
+    if (node.nodeName === '#text') parts.push(node.value);
+    if (node.tagName === 'br' || block.has(node.tagName)) parts.push('\n');
+    for (const child of node.childNodes || []) walk(child);
+    if (block.has(node.tagName)) parts.push('\n');
+  };
+  walk(parseFragment(value));
+  return parts.join('').replace(/\u00a0/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function cleanCourseName(name, code) {
@@ -225,8 +235,8 @@ function hash(body){return crypto.createHash('sha256').update(body).digest('hex'
 function isWithin(target,root){const relative=path.relative(root,target);return relative && !relative.startsWith('..')&&!path.isAbsolute(relative);}
 function parseJson(value){try{return JSON.parse(value);}catch{return {};}}
 function writeMarkdown(target,lines){atomicWrite(target,Array.isArray(lines)?`${lines.join('\n')}\n`:lines);}
-function cell(value){return String(value??'').replace(/\|/g,'\\|').replace(/\s+/g,' ').trim();}
-function escapeMarkdown(value){return String(value??'').replace(/[\[\]]/g,'\\$&');}
+function cell(value){return escapeMarkdown(value).replace(/\s+/g,' ').trim();}
+function escapeMarkdown(value){return String(value??'').replace(/&/g,'&amp;').replace(/[\\`*_{}\[\]()#!|]/g,'\\$&').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fileLink(value){return pathToFileURL(value).href.replace(/\(/g,'%28').replace(/\)/g,'%29');}
 function formatBytes(value){if(value==null)return 'unknown size';if(value<1024)return `${value} B`;if(value<1048576)return `${(value/1024).toFixed(1)} KiB`;return `${(value/1048576).toFixed(1)} MiB`;}
 

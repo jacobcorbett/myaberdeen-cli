@@ -55,7 +55,17 @@ export async function syncPanopto({ session, database, config, courses, limitRec
         if (folder) folders.set(recordingId(folder), { Id: recordingId(folder), Name: '', source: 'explicit' });
         // Student viewers may see a recording without being allowed to enumerate its folder.
         // Search is supplementary; only exact course/year matches are selected.
-        if (!folders.size) {
+        let successfulFolders = 0, folderErrors = 0;
+        for (const f of folders.values()) {
+          try {
+            const sessions = await client.folderSessions(f.Id);
+            successfulFolders++;
+            for (const row of sessions) ids.add(recordingId(row.Id));
+            database.db.prepare(`INSERT INTO recording_folders VALUES(?,?,?,?,?) ON CONFLICT(course_id,id) DO UPDATE SET name=excluded.name,source=excluded.source,checked_at=excluded.checked_at`)
+              .run(course.id, f.Id, f.Name || '', f.source, new Date().toISOString());
+          } catch (error) { if (error instanceof AuthenticationRequiredError || signal?.aborted) throw error; folderErrors++; report(error); }
+        }
+        if (!successfulFolders || folderErrors) {
           const codes = [...new Set(course.course_code.match(/[A-Z]{2,}\d{4}/gi) || [])];
           for (const code of codes) {
             try {
@@ -63,15 +73,7 @@ export async function syncPanopto({ session, database, config, courses, limitRec
             } catch (error) { if (error instanceof AuthenticationRequiredError || signal?.aborted) throw error; report(error); }
           }
         }
-        for (const f of folders.values()) {
-          try {
-            const sessions = await client.folderSessions(f.Id);
-            for (const row of sessions) ids.add(recordingId(row.Id));
-            database.db.prepare(`INSERT INTO recording_folders VALUES(?,?,?,?,?) ON CONFLICT(course_id,id) DO UPDATE SET name=excluded.name,source=excluded.source,checked_at=excluded.checked_at`)
-              .run(course.id, f.Id, f.Name || '', f.source, new Date().toISOString());
-          } catch (error) { if (error instanceof AuthenticationRequiredError || signal?.aborted) throw error; report(error); }
-        }
-        result.discovery.push({ courseId: course.id, coverage: folders.size ? 'folders' : 'course-links-and-search', folderInventoryComplete: folders.size > 0 && complete, discovered: ids.size });
+        result.discovery.push({ courseId: course.id, coverage: successfulFolders ? 'folders' : 'course-links-and-search', listedFolders: successfulFolders, searchUsed: !successfulFolders || folderErrors > 0, folderInventoryComplete: folders.size > 0 && complete && !folder, discovered: ids.size });
         const processed = new Set();
         for (const id of ids) {
           throwIfAborted(signal);

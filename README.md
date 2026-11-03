@@ -6,7 +6,7 @@ This project is not affiliated with or endorsed by the University of Aberdeen, A
 
 ## Start here
 
-Version **0.3.1** adds guided course setup and optional Obsidian integration.
+Version **0.3.2** improves archive freshness, Panopto discovery, relocation and first-time setup.
 
 1. Download and extract the package for your computer from [Releases](https://github.com/jacobcorbett/myaberdeen-cli/releases/latest), or install from source below. Google Chrome is required.
 2. Run `myab login` and complete your own university sign-in/MFA.
@@ -63,7 +63,7 @@ To stop local session reuse, finish all CLI operations, close the dedicated CLI 
 
 Downloaded files and exports can include grades, messages and other people's information. The default `~/Documents/MyAberdeen` may be covered by iCloud, OneDrive or another backup service. Choose a suitable private location with `MYAB_DOWNLOAD_DIR` and protect your archives and backups. Review all diagnostics before sharing them.
 
-Interactive login launches the configured Chrome executable. Defaults cover macOS, standard Google Chrome installations on Linux, and Windows; override `MYAB_CHROME` for another installation. Live SSO has been verified on macOS. CI checks the deterministic code on macOS and Linux; other live platform/login combinations still need local verification.
+Interactive login launches the configured Chrome executable. Defaults cover macOS, standard Google Chrome installations on Linux, and Windows; override `MYAB_CHROME` for another installation. Live SSO has been verified on macOS. CI checks deterministic code on macOS, Linux and Windows; other live platform/login combinations still need local verification.
 
 ## AI agent skill and updates
 
@@ -91,7 +91,7 @@ Preserve local edits and pinned/forked installations instead of resetting them. 
 
 ## Select current courses explicitly
 
-Run `myab setup` after login. It lists your memberships with their terms, lets you select courses by number, and saves exact course IDs to the local `profiles.current` allowlist used by `--active`. Existing custom settings and other profiles are preserved; the current selection is replaced. Blank course input cancels without saving. No courses are selected automatically, including old memberships.
+Run `myab setup` after login. It lists your memberships with their terms, lets you select courses by number, and saves exact course IDs to the local `profiles.current` allowlist used by `--active`. Existing custom settings and other profiles are preserved; the current selection is replaced. Blank course input cancels without saving. Trailing commas in course-number input are accepted, typos are retried, and an invalid optional vault path can be corrected without repeating course selection. Quoted pasted paths and POSIX escaped spaces are accepted. No courses are selected automatically, including old memberships.
 
 For an AI assistant or another non-interactive caller, first use `myab courses --json`, then pass exact IDs/codes explicitly:
 
@@ -99,7 +99,9 @@ For an AI assistant or another non-interactive caller, first use `myab courses -
 myab setup --course YOUR_COURSE_ID --course ANOTHER_COURSE_ID
 ```
 
-`myab paths` shows the local configuration file (normally `~/.local/share/myaberdeen-cli/config.json`). Manual configuration remains supported with `config.example.json`; replace its placeholder courses. Configuration is private and should not be committed. The example deliberately omits `academicStartYear`: vault folders default to academic years such as `2026-27`. If you want “Year 1”, “Year 2”, etc., set your own start year with `myab setup --course YOUR_COURSE_ID --academic-start-year YYYY`. Existing start-year settings are preserved unless explicitly changed.
+`myab paths` shows the local configuration file (normally `~/.local/share/myaberdeen-cli/config.json`). Manual configuration remains supported with `config.example.json`; replace its placeholder courses. Configuration is private and should not be committed. You can persist a download location with `"downloadDir": "~/Documents/MyAberdeen"` and a nonstandard Chrome executable with `"chromePath": "/path/to/chrome"` in that file. Relative JSON paths resolve beside the configuration file rather than the current shell directory. Environment overrides take precedence and retain normal shell-relative path behaviour. Chrome discovery also checks per-user macOS/Windows installations, Windows Program Files (x86), and `/opt/google/chrome/chrome`. Both `~/` and `~\` home prefixes are accepted. `doctor` and `paths` show resolved locations; malformed configuration reports its path, and `help`/`version` remain usable.
+
+The example deliberately omits `academicStartYear`: vault folders default to academic years such as `2026-27`. If you want “Year 1”, “Year 2”, etc., set your own start year with `myab setup --course YOUR_COURSE_ID --academic-start-year YYYY`. Existing start-year settings are preserved unless explicitly changed. Existing generated course directories are reused by their Blackboard course ID, including older `Unsorted` or mislabelled year folders, so the parser correction does not create duplicate notes. If multiple generated directories declare the same course, pin the intended folder with `courseDirectories` before merging.
 
 ```sh
 myab courses
@@ -114,6 +116,7 @@ myab show --course CS4028_27 --id <content-id>
 - `check` and plain `sync` refresh metadata without downloading lecture files.
 - `refresh`, `download`, and `sync --download-files` also verify/download current file candidates.
 - `brief` and `status` read the local archive, including section freshness, visibility, file paths, extraction paths and recent changes. They do not launch Chrome or fetch anything.
+- `brief.stale` describes the six metadata sections (content, announcements, grades, schedule, messages and discussions). A recently checked but unavailable section is listed in `inaccessibleSections` rather than retried indefinitely. `staleSections` identifies old/missing/partial metadata; `sectionFreshness` separately reports optional file/Panopto checks. `recentChanges` contains the newest twenty changes for that course in chronological order.
 - `changes --since` accepts an integer cursor or ISO timestamp. Each caller keeps its own cursor; reading does not consume changes for another caller.
 - `show` reads one archived content body with provenance.
 - `--course` is repeatable. Exact IDs/codes take precedence over fragments; a fragment may select multiple courses. `--term` selects by term label. `--all` is an explicit broad selection.
@@ -136,7 +139,7 @@ myab verify-files --active
 myab doctor
 ```
 
-A file limit caps attempts, including failures. Deferred files make the run `limited`; resume advances past successful file checks and completed courses in that run. It retains the original file-attempt limit and deep-check setting unless overridden; a resume preview shows only the remaining selection. Normal cancellation records its status and releases Chrome and the archive lock. A later writer marks abandoned `running` entries interrupted. A process lock prevents simultaneous archive writers; Chrome's own profile locks are never deleted.
+A file limit caps attempts, including failures. Repeated limited refreshes rotate courses by their last file-attempt run and check unattempted/oldest-attempted files first, so failed or unchanged files do not monopolise the budget. `--resume` still follows its original bounded selection. Deferred files make the run `limited`; resume advances past successful file checks and completed courses in that run. It retains the original file-attempt limit and deep-check setting unless overridden; a resume preview shows only the remaining selection. Normal cancellation records its status and releases Chrome and the archive lock. A later writer marks abandoned `running` entries interrupted. A process lock prevents simultaneous archive writers; Chrome's own profile locks are never deleted.
 
 Transient network/429/5xx errors receive at most two retries, with bounded backoff/Retry-After. 401/403/404 are not retried. API shape changes, repeated pages and pagination caps become explicit failures instead of silent success.
 
@@ -159,7 +162,7 @@ myab panopto-download --course CS4028_27 --id <recording-uuid>
 
 `panopto-sync` reads the selected courses from the local Blackboard archive. Run a scoped `check` first to discover newly posted links, or use `check --panopto` to do both. It handles ordinary viewer/embed links and Blackboard Panopto LTI deep links, following their normal launch to resolve the viewer ID. Search supplements those links and only accepts matching course codes **and academic years**. It never downloads recordings from unrelated search results.
 
-Student access to an individual recording does not necessarily include access to its folder. Results report `discovery.coverage`: `course-links-and-search` means accessible linked/searchable recordings, **not a guaranteed complete folder inventory**. These runs retain previously archived recordings without marking unseen ones removed. A known folder can be selected with `--folder <uuid>` for one course, or mapped in local `config.json` under `panoptoFolders`, keyed by exact Blackboard course ID or course code, with an array of folder UUIDs. Folder reads paginate, traverse exposed subfolders, and only mark missing recordings historical after a complete successful traversal. Access denial and partial traversal preserve the previous archive. No account-wide folder crawl is performed.
+Student access to an individual recording does not necessarily include access to its folder. Results report `discovery.coverage`: `course-links-and-search` means accessible linked/searchable recordings, **not a guaranteed complete folder inventory**. These runs retain previously archived recordings without marking unseen ones removed. A known folder can be selected with `--folder <uuid>` for one course, or mapped in local `config.json` under `panoptoFolders`, keyed by exact Blackboard course ID or course code, with an array of folder UUIDs. Folder reads paginate and traverse exposed subfolders. If no folder can be listed, or a folder read fails, course search supplements discovery while failures remain visible as partial results. Only a complete successful traversal of the known linked/configured folders can mark recordings historical. An explicit `--folder` scan retains other archived recordings as current and reports `folderInventoryComplete: false`. Access denial and partial traversal preserve the previous archive. No account-wide folder crawl is performed.
 
 The archive includes recording title, description, date, duration, owner, folder information when exposed, viewing progress, all exposed caption languages and timed segments, AI-generated chapters/key points/summary, and contents timing. AI summaries and automatic captions are labelled as such and may contain errors. `recording` lists language IDs; select one with `transcript --language <id>`. Formats: `text` (default), `json`, `srt`, `vtt`. Search returns timestamped matches with playback links. Offline commands do not open Chrome.
 
@@ -199,7 +202,7 @@ myab merge-vault --active
 
 Selections apply to generated notes, export datasets and duplicate removals. Merge previews list the intended course directories, generated files and hash-identical duplicate removals. Same-course curated copies are preferred. Course directories include academic-year identity; explicit mappings can be supplied using `courseDirectories`, keyed by Blackboard course ID and relative to the vault's `Uni` directory. Conflicting existing course ownership is rejected.
 
-Generated files live in each course's `MyAberdeen` directory. Keep personal notes in separate files; generated section files are owned by the exporter. Arbitrary personal Markdown elsewhere is preserved. Byte-identical raw duplicates may be removed during merge; `--keep-duplicates` retains them. An unselected course's raw files are not removed.
+Generated files live in each course's `MyAberdeen` directory. Imported HTML is decoded once and emitted as escaped text, including Markdown image syntax, so message/announcement text cannot become active markup in vault section notes. Recording transcript exports retain their existing formatting. Keep personal notes in separate files; generated section files are owned by the exporter. Arbitrary personal Markdown elsewhere is preserved. Byte-identical raw duplicates may be removed during merge; `--keep-duplicates` retains them. An unselected course's raw files are not removed.
 
 Exports keep ordinary dataset shapes and add `_archive` visibility/change metadata. `freshness.json` contains per-record observation dates and section outcomes separately, so polling timestamps do not rewrite unchanged content bodies. Scoped exports update only selected course directories and preserve other entries in the main index.
 
@@ -213,7 +216,7 @@ myab relocate-files --all --from /old/archive --to /mounted/archive
 myab relocate-files --all --from /old/archive --to /mounted/archive --apply
 ```
 
-Relocation first produces a plan. `--apply` rechecks destination hashes and changes catalogue paths in a transaction. It never moves or deletes source files. Unavailable mounts and mismatched destinations are reported; a missing local path is not proof of data loss. Existing file versions retain their history.
+Relocation covers Blackboard files, retained file versions and downloaded Panopto videos. Each plan item identifies its kind; all catalogue updates use one transaction and are rolled back if a destination or catalogue row changes. Relocation first produces a plan. `--apply` rechecks destination hashes and changes catalogue paths in a transaction. It never moves or deletes source files. Unavailable mounts and mismatched destinations are reported; a missing local path is not proof of data loss. Existing file versions retain their history.
 
 ## Paths and exits
 

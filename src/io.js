@@ -51,7 +51,7 @@ export function acquireLock(stateDir) {
     // Serialise stale-owner checks so a second recovering process cannot remove
     // the first process's newly acquired lock. An unfinished recovery fails closed.
     const recovery = `${target}.recovery`;
-    const busy = () => new Error('Another MyAberdeen operation holds or is recovering the local archive lock. Retry after it finishes.');
+    const busy = () => new Error(`Another MyAberdeen operation holds or is recovering the local archive lock at ${target}. Retry after it finishes. Run myab doctor to inspect the owner; do not remove a lock while a process is active.`);
     try { fs.mkdirSync(recovery, { mode: 0o700 }); }
     catch (e) { if (e.code === 'EEXIST') throw busy(); throw e; }
     try {
@@ -74,4 +74,16 @@ export function acquireLock(stateDir) {
     try { if (JSON.parse(fs.readFileSync(path.join(target, 'owner.json'), 'utf8')).nonce === nonce) fs.rmSync(target, { recursive: true }); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
   };
+}
+
+export function lockStatus(stateDir) {
+  const target = path.join(stateDir, 'operation.lock');
+  let owner = null;
+  try { owner = JSON.parse(fs.readFileSync(path.join(target, 'owner.json'), 'utf8')); } catch { /* Missing/malformed ownership stays unknown. */ }
+  const pid = Number.isSafeInteger(owner?.pid) && owner.pid > 0 ? owner.pid : null;
+  let ownerAlive = null;
+  if (pid !== null) {
+    try { process.kill(pid, 0); ownerAlive = true; } catch (error) { ownerAlive = error.code === 'ESRCH' ? false : null; }
+  }
+  return { path: target, locked: fs.existsSync(target), recoveryPending: fs.existsSync(`${target}.recovery`), ownerPid: pid, ownerAlive };
 }

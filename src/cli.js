@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { getConfig, prepareLocalState, requireVault } from './config.js';
+import { getConfig, getConfigPaths, ConfigurationError, prepareLocalState, requireVault } from './config.js';
 import { BlackboardSession, AuthenticationRequiredError } from './browser.js';
 import { getAccountOverview, courseFromMembership, courseCode, selectCourses } from './api.js';
 import { ArchiveDatabase } from './database.js';
@@ -25,15 +25,16 @@ const onSignal = signal => { controller.abort(new Error(`Cancelled by ${signal}.
 process.once('SIGINT', () => onSignal('SIGINT')); process.once('SIGTERM', () => onSignal('SIGTERM'));
 try {
   ({ command, options } = parseArgs(process.argv.slice(2)));
-  config = getConfig();
   if (command === 'help') printHelp();
-  else if (command === 'paths') output(config);
   else if (command === 'version') console.log(JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
   else {
+    config = getConfig();
+    if (command === 'setup' && !options.course && !process.stdin.isTTY) throw new Error('Interactive setup needs a terminal. Use myab setup --course <exact-ID/code> (repeatable) for non-interactive setup.');
     const mutates = ['setup', 'login', 'panopto-login', 'panopto-sync', 'panopto-download', 'sync', 'check', 'download', 'refresh', 'repair', 'extract'].includes(command) || ['export', 'merge-vault'].includes(command) && !options.dryRun || command === 'relocate-files' && options.apply;
     if (mutates) release = acquireLock(config.stateDir);
     if (command === 'merge-vault') requireVault(config);
-    if (command === 'setup') {
+    if (command === 'paths') output(config);
+    else if (command === 'setup') {
       const courses = await withSession(async session => {
         const { memberships, terms } = await getAccountOverview(session);
         const names = new Map(terms.map(t => [t.id, t.name]));
@@ -62,7 +63,8 @@ try {
     } else await localCommand();
   }
 } catch (error) {
-  console.error(`Error: ${safeMessage(error)}`);
+  if (error instanceof ConfigurationError && ['paths', 'doctor'].includes(command)) output({ ...getConfigPaths(), configError: safeMessage(error), suggestions: ['Fix the configuration file, then retry. Help and version work without valid configuration.'] });
+  else console.error(`Error: ${safeMessage(error)}`);
   if (!controller.signal.aborted) process.exitCode = error instanceof AuthenticationRequiredError ? 2 : 1;
 } finally { if (release) release(); }
 

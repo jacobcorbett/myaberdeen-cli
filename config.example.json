@@ -12,5 +12,6 @@
   "courseDirectories": {},
   "freshnessMinutes": 60,
   "deepCheckHours": 24,
-  "panoptoFolders": {}
+  "panoptoFolders": {},
+  "downloadDir": "~/Documents/MyAberdeen"
 }
