@@ -19,7 +19,7 @@ For a public repository, you can fork and submit a PR without collaborator acces
    npm ci
    ```
 
-4. Make a focused change and add meaningful regression tests where appropriate. Keep the README and `skills/myaberdeen-cli/SKILL.md` aligned with any command or setup changes.
+4. Make a focused change and add meaningful regression tests where appropriate. Keep the README and `skills/myaberdeen-cli/SKILL.md` aligned with any command or setup changes. Record user-facing changes under Unreleased in `CHANGELOG.md`, using Added, Changed or Fixed entries that explain the effect on users and any limits or upgrade steps. Release dates belong to published releases.
 5. Run the checks below and review your complete diff for accidental files and personal data.
 6. Commit and push to **your fork**:
 

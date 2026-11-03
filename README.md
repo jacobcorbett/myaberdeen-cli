@@ -4,6 +4,8 @@ An unofficial, read-only terminal client for the University of Aberdeen's Blackb
 
 This project is not affiliated with or endorsed by the University of Aberdeen, Anthology/Blackboard or Panopto. Use only your own authorised access, follow your institution's IT rules, and respect course-content and recording permissions. The MIT licence covers this software, not university materials downloaded with it.
 
+See [CHANGELOG.md](CHANGELOG.md) for release history, upgrade notes and unreleased changes.
+
 ## Start here
 
 Version **0.3.2** improves archive freshness, Panopto discovery, relocation and first-time setup.
