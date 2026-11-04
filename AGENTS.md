@@ -36,6 +36,7 @@ This is a terminal-native MyAberdeen archive client for University of Aberdeen u
 - Keep commits focused and reversible, using concise conventional commit subjects.
 - Run `npm run check` before publishing. Do not change repository visibility unless Jacob authorises it.
 - Inspect staged files for runtime data and secrets before each commit.
+- End every pull request description with the model and harness that did the work, for example `Model: Claude Opus 5.5. Harness: Claude Code in T3 Code.`
 
 ## Archive-first workflow
 

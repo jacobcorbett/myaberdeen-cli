@@ -29,7 +29,7 @@ For a public repository, you can fork and submit a PR without collaborator acces
    git push -u origin fix/describe-the-change
    ```
 
-7. Open a pull request from your fork's branch to `jacobcorbett/myaberdeen-cli:main`. Link the issue, explain the resulting behaviour, list the checks you ran and call out any limitations. Jacob reviews and merges accepted changes; approval alone does not grant you merge access.
+7. Open a pull request from your fork's branch to `jacobcorbett/myaberdeen-cli:main`. Link the issue, explain the resulting behaviour, list the checks you ran and call out any limitations. If you used an agent, end the description with the model and harness that did the work, such as `Model: Claude Opus 5.5. Harness: Claude Code in T3 Code.` or `Model: GPT 6.1 Sol. Harness: Codex.` Jacob reviews and merges accepted changes; approval alone does not grant you merge access.
 
 Use Conventional Commit PR titles and preserve that title when squash merging; release automation derives version bumps from the merged commit. Do not bump package versions in feature PRs: the owner reviews and merges the generated release PR when ready to ship. See [release operations](docs/development.md#making-releases).
 
@@ -65,7 +65,7 @@ These packaging checks run on your current OS/CPU and download the official Node
 - Obsidian integration is optional. Do not add a contributor's personal paths, course selection or academic start year as defaults.
 - If you discover an exposed credential or security problem, follow the private reporting instructions in [SECURITY.md](SECURITY.md). Do not put the secret or a working exploit in an issue; revoke any exposed credential promptly.
 
-Read [AGENTS.md](AGENTS.md) for the repository's development guidance and the [README](README.md) for setup and supported behaviour. AI-assisted contributions are welcome under the same review, privacy and testing requirements; you remain responsible for understanding the change.
+Read [AGENTS.md](AGENTS.md) for the repository's development guidance and the [README](README.md) for setup and supported behaviour. AI-assisted contributions are welcome under the same review, privacy and testing requirements; name the model and harness at the end of the PR description. You remain responsible for understanding the change.
 
 ## Licence
 
