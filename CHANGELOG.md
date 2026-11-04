@@ -4,11 +4,16 @@ All notable changes to this project will be documented in this file.
 
 Entries describe what changed for users, why it changed, and any limits or upgrade steps. Releases are listed newest first; work that has not shipped belongs under Unreleased.
 
-## [Unreleased]
+## [0.4.0](https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.3.4...v0.4.0) (2026-11-04)
 
-### Added
 
-- Archive completed test reviews during scoped Blackboard syncs, including question text, options, student responses and released feedback. Add offline `test-reviews` JSON/text output and private export/vault notes. Validate question pagination/counts and preserve previous snapshots on denied or incomplete reads; correct answers and per-question scores remain subject to Blackboard visibility. Coverage is limited to gradebook-referenced completed test attempts; embedded media remains linked.
+### Features
+
+* archive completed Blackboard test reviews ([#1](https://github.com/jacobcorbett/myaberdeen-cli/issues/1)) ([1337d4d](https://github.com/jacobcorbett/myaberdeen-cli/commit/1337d4d9a0c2292d7ab2276030ef76d2bc20b5a0))
+
+Archive completed test reviews during scoped Blackboard syncs, including question text, options, student responses and released feedback. Add offline `test-reviews` JSON/text output and private export/vault notes. Validate question pagination/counts and preserve previous snapshots on denied or incomplete reads; correct answers and per-question scores remain subject to Blackboard visibility. Coverage is limited to gradebook-referenced completed test attempts; embedded media remains linked.
+
+### Release automation
 
 - Prepare version and changelog pull requests with Release Please. Merging a release PR creates a tagged draft; verified portable downloads become public only after all platform builds, smoke tests and security checks pass. Owner-only repository rules remain in force.
 
@@ -137,7 +142,6 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 - Node SQLite warning handling in command-error checks, database cleanup before removing Windows fixtures, and Windows launcher quoting in the portable smoke check.
 
-[Unreleased]: https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.3.4...HEAD
 [0.3.4]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.4
 [0.3.3]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.3
 [0.3.2]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.2
