@@ -19,6 +19,8 @@ def font(size, mono=False, bold=False):
     candidates = [override] if override else []
     candidates += (['/System/Library/Fonts/Menlo.ttc', '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'] if mono else
                    ['/System/Library/Fonts/Supplemental/Arial Bold.ttf' if bold else '/System/Library/Fonts/Supplemental/Arial.ttf',
+                    # Liberation Sans matches Arial's metrics, so Linux renders keep the macOS layout.
+                    '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
                     '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'])
     for candidate in candidates:
         if Path(candidate).is_file():
@@ -93,15 +95,20 @@ def export_preview():
         text(d, (75, 246 + 43 * i), name, 18, TEAL if 'Index.md' in name else MUTED, True)
     text(d, (435, 191), 'MyAberdeen / Index.md', 19, MUTED, True)
     # Use the real generated heading, term and section labels. Omit machine paths.
-    heading = next(line[2:] for line in DATA['index'].splitlines() if line.startswith('# '))
-    for i, line in enumerate(textwrap.wrap(heading, 40)):
-        text(d, (435, 248 + i * 43), line, 33, bold=True)
-    text(d, (435, 364), 'Term: 2026-27', 22, MUTED)
-    text(d, (435, 422), 'Offline sections', 27, bold=True)
+    lines = DATA['index'].splitlines()
+    heading = next(line[2:] for line in lines if line.startswith('# '))
+    term = next(line[2:] for line in lines if line.startswith('- Term: '))
+    y = 248
+    for line in textwrap.wrap(heading, 40):
+        text(d, (435, y), line, 33, bold=True)
+        y += 43
+    # Lay out the rest relative to the heading's last line, however many lines it wraps to.
+    text(d, (435, y + 30), term, 22, MUTED)
+    text(d, (435, y + 88), 'Offline sections', 27, bold=True)
     links = re.findall(r'^- \[([^]]+)\]\([^)]+\) — (.+)$', DATA['index'], re.M)
     for i, (label, detail) in enumerate(links):
-        text(d, (448, 480 + i * 44), label, 23, TEAL)
-        text(d, (720, 480 + i * 44), detail, 22, MUTED)
+        text(d, (448, y + 146 + i * 44), label, 23, TEAL)
+        text(d, (720, y + 146 + i * 44), detail, 22, MUTED)
     text(d, (54, 956), 'SYNTHETIC DATA · Generated export preview · Obsidian is optional', 18, MUTED, True)
     image.save(MEDIA / 'obsidian-export.png', optimize=True)
 
