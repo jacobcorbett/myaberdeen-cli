@@ -31,13 +31,25 @@ The build targets the current OS/CPU and downloads the matching official Node di
 
 ## Making releases
 
-1. Update `package.json` and `package-lock.json` to the same version and commit the changes.
-2. Run the **Release** workflow manually against the branch with **publish disabled** to check every platform before tagging.
-3. Push a matching stable tag, for example `git tag v0.2.0` then `git push origin v0.2.0`.
+Release Please prepares releases after owner-authored pushes/merges to `main`. It maintains a release PR containing the version changes in `package.json`, `package-lock.json` and `.release-please-manifest.json`, plus generated release notes in `CHANGELOG.md`. Merge normal feature/fix PRs first; merge the release PR only when ready to ship. Multiple changes can share one release. Do not manually bump versions for each feature PR.
 
-The Release workflow runs tests, builds and smoke-checks each archive on its native platform, and publishes the release with all downloads/checksums only when every build succeeds. Manual publishing requires an existing `vX.Y.Z` tag matching the package version. GitHub's source archives and the normal source-install route remain available.
+Use Conventional Commit titles for squash merges: `fix:` proposes a patch and `feat:` proposes a minor version. Before 1.0, `feat!:` or a `BREAKING CHANGE:` footer proposes a minor bump; after 1.0 it proposes a major bump. `docs:`, `chore:` and `ci:` alone do not normally trigger a release. Review the proposed version and notes before merging. Use squash merge with the conventional PR title, or preserve conventional commit messages when using a merge commit.
 
-Release jobs use the exact Node 26.13.0 pin in `.node-version`. Platform checks run on macOS ARM64 (Apple Silicon), Linux x64 and Windows x64. Intel Macs are not supported. Live authentication is deliberately excluded from CI. Only the repository owner can run the release jobs. Existing release assets are never overwritten by the workflow; `BUILD.json` records the exact runtime and commit used.
+Merging the release PR authorises publication. Release Please creates a version tag and a **draft** GitHub release. The tag starts the existing Release workflow, which runs checks, the security audit, builds and extracted-bundle smoke tests on Apple Silicon macOS, Linux x64 and Windows x64. Only after every platform succeeds are all downloads uploaded and the draft published. No npm package is published. Intel Macs are not supported. Existing assets are never overwritten.
+
+The bootstrap records `v0.3.4` as the starting release, so older history is not repackaged. The `Release preparation` workflow can also be run manually on `main` to retry preparation or refresh its release PR.
+
+### One-time credential setup
+
+Owner-only branch/tag rules remain in place. Create a **fine-grained personal access token owned by the repository owner**, limited to this repository, with repository permissions **Contents: Read and write**, **Pull requests: Read and write**, and **Issues: Read and write** (for release labels). Save it as the Actions repository secret `RELEASE_PLEASE_TOKEN`. Renew the secret before the chosen expiry. Never store it in Git or a local configuration file.
+
+This owner credential allows the release branch/tag operations under the existing rules and lets PR/tag events trigger normal CI. The built-in `GITHUB_TOKEN` cannot bypass these rules and does not trigger downstream PR/tag workflows; there is deliberately no fallback. The release preparation workflow and release build/publish workflow only run when both the original actor and rerun actor are the repository owner. A missing or expired token makes preparation fail visibly; it does not weaken the repository rules.
+
+### Failed builds and manual recovery
+
+If a release build fails, its draft stays unpublished. Rerun failed jobs after correcting the underlying problem, or run **Release** manually against the existing version tag with **publish enabled**. Release Please may already have marked that version tagged, so rerunning preparation is not a substitute for retrying its Release workflow. For a partial upload failure, inspect the draft assets before retrying: existing assets are not overwritten; remove only incomplete draft assets deliberately before uploading again. Do not move an existing tag or replace published downloads.
+
+For an intentional manual release, update the package/lock/manifest versions together, run **Release** manually against the branch with **publish disabled** for all-platform validation, then push a matching stable `vX.Y.Z` tag. Source installation remains available. `BUILD.json` records the exact runtime and commit used. Live university authentication is excluded from CI.
 
 ## Security checks
 

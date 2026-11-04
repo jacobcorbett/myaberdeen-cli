@@ -6,6 +6,10 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 ## [Unreleased]
 
+### Added
+
+- Prepare version and changelog pull requests with Release Please. Merging a release PR creates a tagged draft; verified portable downloads become public only after all platform builds, smoke tests and security checks pass. Owner-only repository rules remain in force.
+
 ## [0.3.4] - 2026-11-04
 
 ### Removed

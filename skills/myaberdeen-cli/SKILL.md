@@ -110,3 +110,7 @@ Media is opt-in: `panopto-download --course CODE --id UUID --dry-run`, then the 
 ## Local configuration and diagnostics
 
 Persist `downloadDir` and `chromePath` in local JSON when settings must survive new shells or schedulers; corresponding environment variables override them. Relative JSON paths are anchored to the configuration directory. Existing generated course directories are reused by their recorded Blackboard ID, so old year labels are retained; use explicit courseDirectories to resolve duplicate ownership. Home expansion accepts `~/` and `~\`. `help` and `version` work with broken configuration; `doctor`/`paths` return `configPath` and `configError` with exit 1 so the user can repair the file. Setup retries invalid interactive input without discarding course choices. For lock errors, inspect `doctor.operationLock` (path, owner PID/aliveness, recovery state); never remove active operation locks or Chrome profile locks.
+
+## Maintainer releases
+
+Release Please maintains a version/changelog PR after owner merges to `main`; use conventional feature/fix commit titles and keep feature PRs free of manual version bumps. Merging the release PR creates a tag and draft release. The Release workflow publishes the downloads only after checks, security audit and all three platform build/smoke checks pass. Owner-only branch/tag protections remain; preparation requires the repository-scoped owner secret `RELEASE_PLEASE_TOKEN`. See `docs/development.md` for permissions, expiry and failed-draft recovery. Do not move tags or overwrite assets.
