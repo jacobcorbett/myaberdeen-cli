@@ -91,7 +91,7 @@ test('doctor distinguishes optional vault/tools from missing onboarding configur
   assert.equal(result.configFound, true);
   assert.equal(result.currentCoursesConfigured, true);
   assert.equal(typeof result.extractionTools.pdftotext, 'boolean');
-  assert.equal(typeof result.extractionTools.unzip, 'boolean');
+  assert.equal(result.extractionTools.office, true);
   assert.ok(!result.suggestions.some(s => s.includes('then myab setup')));
 });
 

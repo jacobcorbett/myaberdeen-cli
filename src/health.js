@@ -106,7 +106,7 @@ export function localDoctor(config) {
   const current = config.profiles?.current;
   const currentCoursesConfigured = Array.isArray(current) && current.length > 0 && current.every(c => typeof c === 'string' && c.trim());
   const chromeFound = executableFound(config.chromePath);
-  const extractionTools = { pdftotext: executableFound(config.pdftotext || 'pdftotext'), unzip: executableFound('unzip') };
+  const extractionTools = { pdftotext: executableFound(config.pdftotext || 'pdftotext'), office: true };
   const vaultConfigured = !!config.vaultRoot;
   const vaultFound = vaultConfigured && fs.existsSync(path.join(config.vaultRoot, 'Uni')) && fs.statSync(path.join(config.vaultRoot, 'Uni')).isDirectory();
   const operationLock = lockStatus(config.stateDir);
@@ -118,7 +118,6 @@ export function localDoctor(config) {
   if (!fs.existsSync(config.databasePath)) suggestions.push('After setup, run myab check --active to create your local archive.');
   if (vaultConfigured && !vaultFound) suggestions.push('Obsidian vault is unavailable: mount it or configure a vault containing Uni with myab setup --vault <path>.');
   if (!extractionTools.pdftotext) suggestions.push('Optional PDF extraction: install Poppler (macOS: brew install poppler; Debian/Ubuntu: sudo apt install poppler-utils; Windows: install Poppler and add its bin directory to PATH).');
-  if (!extractionTools.unzip) suggestions.push('Optional Office extraction: install unzip (macOS: brew install unzip; Debian/Ubuntu: sudo apt install unzip; Windows: install an unzip.exe utility and add it to PATH).');
   return { node: process.version, platform: process.platform, chromeFound, configFound, currentCoursesConfigured,
     vaultConfigured, vaultFound, extractionTools, suggestions,
     databaseFound: fs.existsSync(config.databasePath), profileLocked: fs.existsSync(path.join(config.profileDir, 'SingletonLock')) || (() => { try { fs.lstatSync(path.join(config.profileDir, 'SingletonLock')); return true; } catch { return false; } })(),

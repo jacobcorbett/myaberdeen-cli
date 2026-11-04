@@ -3,15 +3,27 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseFragment } from 'parse5';
 import { atomicWrite, fileMatches } from './io.js';
+import { readZipEntries } from './zip.js';
 
-const VERSION = 'text-v1';
+const VERSION = 'text-v2';
+const SLIDE = /^ppt\/slides\/slide(\d+)\.xml$/;
+function officeXml(file, extension) {
+  if (extension === '.docx') {
+    const [document] = readZipEntries(file.local_path, name => name === 'word/document.xml');
+    if (!document) throw Object.assign(new Error('Missing document body'), { code: 'EZIP' });
+    return document.data.toString('utf8');
+  }
+  return readZipEntries(file.local_path, name => SLIDE.test(name))
+    .map(entry => ({ number: Number(SLIDE.exec(entry.name)[1]), xml: entry.data.toString('utf8') }))
+    .sort((a, b) => a.number - b.number)
+    .map(slide => slide.xml).join('\n');
+}
 function extractText(file, config) {
   const extension = path.extname(file.title || file.local_path).toLowerCase();
   const options = { encoding: 'utf8', timeout: 30_000, maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] };
   if (extension === '.pdf') return execFileSync(config.pdftotext || 'pdftotext', ['-layout', file.local_path, '-'], options);
   if (['.docx', '.pptx'].includes(extension)) {
-    const xml = execFileSync('unzip', ['-p', file.local_path, extension === '.docx' ? 'word/document.xml' : 'ppt/slides/slide*.xml'], options);
-    const fragments = xml.replace(/<\/(?:w:p|a:p)>/g, '\n');
+    const fragments = officeXml(file, extension).replace(/<\/(?:w:p|a:p)>/g, '\n');
     const texts = [];
     const walk = node => { if (node.nodeName === '#text') texts.push(node.value); for (const child of node.childNodes || []) walk(child); };
     walk(parseFragment(fragments)); return texts.join('');
@@ -41,7 +53,9 @@ export function extractFiles(database, config, { courseIds } = {}) {
       database.db.prepare('INSERT OR REPLACE INTO text_extractions VALUES(?,?,?,?,?,?)').run(file.sha256, VERSION, target, 'complete', new Date().toISOString(), null);
       result.extracted++;
     } catch (error) {
-      const message = error.code === 'ENOENT' ? 'Text extraction utility unavailable; install Poppler for PDF or unzip for Office files.' : 'Text extraction failed; inspect the original source.';
+      const message = error.code === 'ENOENT' ? 'Text extraction utility unavailable; install Poppler for PDF text.'
+        : error.code === 'EZIP' ? 'Office document is malformed, unsupported or too large to extract; inspect the original source.'
+          : 'Text extraction failed; inspect the original source.';
       database.db.prepare('INSERT OR REPLACE INTO text_extractions VALUES(?,?,?,?,?,?)').run(file.sha256, VERSION, null, 'failed', new Date().toISOString(), message);
       result.errors.push({ contentId: file.content_id, error: message });
     }

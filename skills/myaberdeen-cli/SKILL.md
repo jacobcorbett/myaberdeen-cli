@@ -50,7 +50,7 @@ Obsidian is optional and has no default vault path. Normal archive commands work
 1. Start with `myab brief --active --json` (or an explicit `--course CODE`). Check `staleSections`, `sectionFreshness`, `inaccessibleSections`, visibility and recorded failures. Overall `stale` covers metadata; optional file/video freshness is separate. A recent access denial is checked-but-inaccessible, not a reason to repeat refreshes indefinitely.
 2. Read returned local sources or `myab show --course CODE --id CONTENT_ID`. Cite course/content identity and observation dates. Cached grades and schedules may not be complete assessment calendars.
 3. For a requested live check, stale material or an empty archive, refresh only the relevant selection. Metadata: `myab check --course CODE`. Files too: `myab refresh --course CODE`. Preview selection with `--dry-run` when a fragment could match several courses.
-4. For document text use `myab extract --course CODE` or refresh with `--extract`. PDF extraction needs Poppler's `pdftotext`; DOCX/PPTX needs `unzip`. Scans and diagrams still require visual inspection.
+4. For document text use `myab extract --course CODE` or refresh with `--extract`. PDF extraction needs Poppler's `pdftotext`; DOCX/PPTX extraction is built in. Scans and diagrams still require visual inspection.
 
 `--course` is repeatable; exact IDs/codes take precedence over fragments. `--active` uses the configured current profile. Do not substitute `--all` when a profile is missing or a selector fails. Whole-account downloads require the user's intended scope to include them. `courses` queries live memberships; `brief`, `show`, `changes` and `status` use local data.
 
