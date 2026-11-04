@@ -2,6 +2,7 @@ import { getAllPages, getAccountOverview, courseCode, selectCourses, normaliseAv
 import { isBlackboardFile, downloadContentFile, embeddedFiles } from './downloads.js';
 import { AuthenticationRequiredError } from './browser.js';
 import { baseCourseCode } from './course-paths.js';
+import { syncAssessmentReviews } from './assessment-reviews.js';
 import { fingerprint, throwIfAborted, safeMessage } from './io.js';
 
 export async function syncArchive({ session, database, config, courseQuery, selectedIds, resumeFrom, limitCourses, limitFiles, downloadFiles = false, deep = false, signal, onProgress = () => {} }) {
@@ -34,7 +35,7 @@ export async function syncArchive({ session, database, config, courseQuery, sele
         const unavailable = [403, 404].includes(error.status);
         database.courseResult(runId, membership.id, unavailable ? 'inaccessible' : 'partial');
         if (unavailable) stats.inaccessible++;
-        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions']) database.finishSection(runId, membership.id, section, unavailable ? 'unavailable' : 'partial');
+        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions', 'assessment-reviews']) database.finishSection(runId, membership.id, section, unavailable ? 'unavailable' : 'partial');
         onProgress(`Could not access ${courseCode(membership)}: ${safeMessage(error)}`);
         continue;
       }
@@ -42,7 +43,7 @@ export async function syncArchive({ session, database, config, courseQuery, sele
       database.upsertCourse(course, termName);
       if (normaliseAvailability(course) === 0) {
         database.recordSyncError(runId, course.id, 'course', new Error('Course is marked unavailable by Blackboard.'));
-        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions']) database.finishSection(runId, course.id, section, 'unavailable');
+        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions', 'assessment-reviews']) database.finishSection(runId, course.id, section, 'unavailable');
         database.courseResult(runId, course.id, 'inaccessible'); stats.inaccessible++;
         onProgress(`Unavailable: ${courseCode(course)} — ${course.name || ''}`); continue;
       }
@@ -54,6 +55,10 @@ export async function syncArchive({ session, database, config, courseQuery, sele
         for (const item of items) database.upsertAnnouncement(course.id, item);
       });
       await section(context, 'grades', () => syncGrades(context, user.id));
+      if (database.sections(course.id).find(s => s.section === 'grades')?.status === 'completed') {
+        await section(context, 'assessment-reviews', () => syncAssessmentReviews(context), undefined,
+          database.sections(course.id).find(s => s.section === 'content')?.status !== 'completed');
+      } else database.finishSection(runId, course.id, 'assessment-reviews', 'partial');
       await section(context, 'schedule', async () => {
         const payload = await session.getJson(`/learn/api/v1/courses/${encodeURIComponent(course.id)}/schedule`);
         const items = Array.isArray(payload) ? payload : payload?.results || payload?.items;

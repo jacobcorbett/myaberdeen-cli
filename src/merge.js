@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { safeFilename } from './downloads.js';
 import { atomicWrite } from './io.js';
 import { formatDuration, getRecordings } from './panopto-data.js';
+import { getAssessmentReviews, renderAssessmentReviews } from './assessment-reviews.js';
 import { baseCourseCode, courseDirectories as findCourseDirectories, resolveCourseDirectory } from './course-paths.js';
 
 export function pluralise(n, noun, plural) {
@@ -105,6 +106,7 @@ function writeCourseIntegration(database, config, course, directory) {
   const discussions = query('discussion_posts');
   const files = query('files');
   const recordings = getRecordings(database, [course.id]);
+  const reviews = getAssessmentReviews(database, [course.id]);
   const rawDirectory = path.join(config.downloadDir, safeFilename(course.term_name || 'No term'), safeFilename(course.course_code));
   writeMarkdown(path.join(target, 'Index.md'), [
     frontmatter('uni', course.course_code),
@@ -119,6 +121,7 @@ function writeCourseIntegration(database, config, course, directory) {
     `- [Recordings](Recordings.md) — ${pluralise(recordings.length, 'Panopto recording')}`,
     `- [Announcements](Announcements.md) — ${pluralise(announcements.length, 'announcement')}`,
     `- [Gradebook](Gradebook.md) — ${pluralise(grades.length, 'grade')}`,
+    `- [Test reviews](Assessment-reviews.md) — ${pluralise(reviews.length, 'completed attempt')}`,
     `- [Messages](Messages.md) — ${pluralise(messages.length, 'message')} in ${pluralise(conversations.length, 'conversation')}`,
     `- [Discussions](Discussions.md) — ${pluralise(discussions.length, 'post')}`,
     `- [Schedule](Schedule.md) — ${pluralise(schedules.length, 'entry')}`, ''
@@ -133,6 +136,7 @@ function writeCourseIntegration(database, config, course, directory) {
       record.aiSummary ? `AI-generated summary: ${escapeMarkdown(record.aiSummary)}` : '', ''])]);
   writeMarkdown(path.join(target, 'Announcements.md'), renderAnnouncements(course, announcements));
   writeMarkdown(path.join(target, 'Gradebook.md'), renderGrades(course, grades));
+  writeMarkdown(path.join(target, 'Assessment-reviews.md'), renderAssessmentReviews(reviews));
   writeMarkdown(path.join(target, 'Messages.md'), renderMessages(course, messages));
   writeMarkdown(path.join(target, 'Discussions.md'), renderDiscussions(course, discussions));
   writeMarkdown(path.join(target, 'Schedule.md'), renderSchedule(course, schedules));
@@ -252,7 +256,7 @@ function previewMerge(database, config, directories, courseIds, deduplicate) {
   for (const course of courses) for (const row of database.db.prepare('SELECT * FROM files WHERE course_id=?').all(course.id)) {
     if (deduplicate && row.local_path && isWithin(row.local_path, config.downloadDir) && hashes.has(row.sha256) && fs.existsSync(row.local_path) && hash(fs.readFileSync(row.local_path)) === row.sha256 && !database.db.prepare('SELECT course_id FROM files WHERE local_path=? UNION ALL SELECT course_id FROM file_versions WHERE local_path=?').all(row.local_path, row.local_path).some(r => courseIds && !courseIds.includes(r.course_id))) removals.push(row.local_path);
   }
-  return { dryRun: true, courses: courses.map(course => ({ id: course.id, directory: resolveCourseDirectory(course, config, directories), notes: ['Index', 'Content', 'Files', 'Recordings', 'Announcements', 'Gradebook', 'Messages', 'Discussions', 'Schedule'].map(n => n + '.md') })), duplicateRemovals: [...new Set(removals)] };
+  return { dryRun: true, courses: courses.map(course => ({ id: course.id, directory: resolveCourseDirectory(course, config, directories), notes: ['Index', 'Content', 'Files', 'Recordings', 'Announcements', 'Gradebook', 'Assessment-reviews', 'Messages', 'Discussions', 'Schedule'].map(n => n + '.md') })), duplicateRemovals: [...new Set(removals)] };
 }
 export function repairLocalIndex(database, config) {
   if (!config.vaultRoot) return 0;

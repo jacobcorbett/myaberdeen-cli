@@ -61,7 +61,7 @@ These packaging checks run on your current OS/CPU and download the official Node
 
 - Keep credentials, cookies, browser profiles, authentication headers, account identifiers, personal configuration, SQLite databases/backups and downloaded course materials out of commits, issues, PRs and shared logs. Use synthetic fixtures instead of real grades, messages or transcripts.
 - Inspect diagnostics before sharing them: paths, course membership and error details can reveal personal information. Never paste raw browser/network captures or your local archive.
-- Blackboard access stays read-only: no submission, messaging, enrolment or assessment-attempt operations. Respect authentication, course permissions and download controls; do not add bypasses or broad account crawls.
+- Blackboard access stays read-only: no submission, messaging, enrolment or assessment-attempt creation/modification operations. Read-only reviews of existing completed attempts are supported. Respect authentication, course permissions and download controls; do not add bypasses or broad account crawls.
 - Obsidian integration is optional. Do not add a contributor's personal paths, course selection or academic start year as defaults.
 - If you discover an exposed credential or security problem, follow the private reporting instructions in [SECURITY.md](SECURITY.md). Do not put the secret or a working exploit in an issue; revoke any exposed credential promptly.
 
