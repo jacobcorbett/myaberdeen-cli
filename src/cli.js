@@ -18,6 +18,7 @@ import { syncPanopto } from './panopto-sync.js';
 import { getRecordings, searchRecordings, transcriptText, recordingId } from './panopto-data.js';
 import { downloadRecording } from './panopto-download.js';
 
+import { getAssessmentReviews, renderAssessmentReviews } from './assessment-reviews.js';
 import { setup } from './setup.js';
 
 let config, options, command, release, activeSession;
@@ -92,7 +93,16 @@ async function localCommand() {
     }
     const courses = selected(database.db.prepare('SELECT * FROM courses ORDER BY course_code').all());
     const courseIds = courses.map(c => c.id);
-    if (['recordings', 'recording', 'transcript'].includes(command)) {
+    if (command === 'test-reviews') {
+      let reviews = getAssessmentReviews(database, courseIds);
+      if (options.id) {
+        if (courseIds.length !== 1) throw new Error('Select exactly one course for an attempt ID.');
+        reviews = reviews.filter(review => review.id === options.id);
+        if (!reviews.length) throw new Error('Test review not archived. Run check for this course first.');
+      }
+      if (options.format === 'text') process.stdout.write(renderAssessmentReviews(reviews));
+      else output(reviews);
+    } else if (['recordings', 'recording', 'transcript'].includes(command)) {
       const records = getRecordings(database, courseIds);
       if (command === 'recordings') { output(searchRecordings(records, options.search)); return; }
       const matches = records.filter(r => r.id === recordingId(options.id));
@@ -189,6 +199,7 @@ Or add --panopto to check/sync/refresh; video downloads remain explicit.
 Panopto read: recordings --course CODE [--search TEXT]; recording --course CODE --id UUID
 Transcript: --course CODE --id UUID [--language NAME] [--format text|json|srt|vtt]
 Panopto download: --course CODE --id UUID [--dry-run] [--max-bytes N] (default 2 GiB)
+Test reviews: test-reviews --course CODE [--id ATTEMPT_ID] [--format json|text]
 Read: changes --since <cursor-or-ISO-date> [--limit N]; show --course <code> --id <content-id>
 Relocate: --from <old-root> --to <new-root> [--apply]; destinations are hash-verified
 Merge: --keep-duplicates; preview generated notes and removals with --dry-run

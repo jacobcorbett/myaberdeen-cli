@@ -5,6 +5,7 @@ import { normaliseAvailability } from './api.js';
 import { migrateState, attachTracking } from './archive-state.js';
 import { safeMessage, fileMatches } from './io.js';
 import { migratePanopto } from './panopto-data.js';
+import { migrateAssessmentReviews } from './assessment-reviews.js';
 
 export class ArchiveDatabase {
   constructor(databasePath, { readOnly = false } = {}) {
@@ -13,8 +14,8 @@ export class ArchiveDatabase {
     const existed = fs.existsSync(databasePath);
     this.db = new DatabaseSync(databasePath, { readOnly });
     if (readOnly) return;
-    if (existed && this.db.prepare('PRAGMA user_version').get().user_version < 3) {
-      const version = this.db.prepare('PRAGMA user_version').get().user_version < 2 ? 2 : 3;
+    if (existed && this.db.prepare('PRAGMA user_version').get().user_version < 4) {
+      const version = 4;
       const backup = `${databasePath}.pre-v${version}-${Date.now()}.bak`;
       this.db.prepare('VACUUM INTO ?').run(backup); fs.chmodSync(backup, 0o600);
       this.backupPath = backup;
@@ -24,6 +25,7 @@ export class ArchiveDatabase {
     this.migrate();
     migrateState(this);
     migratePanopto(this);
+    migrateAssessmentReviews(this);
   }
 
   migrate() {

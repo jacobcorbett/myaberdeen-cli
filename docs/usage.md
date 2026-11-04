@@ -94,3 +94,19 @@ npm run check
 ```
 
 Tests use synthetic data, temporary directories and mocked endpoints. CI needs no university credentials. Blackboard's internal endpoints can change; a successful local test suite does not replace a small live smoke check. Grades/schedules do not guarantee a complete assessment calendar.
+
+## Completed test reviews
+
+Scoped `check`, `sync`, `refresh` and `download` automatically read existing completed test attempts referenced by the current gradebook (first, last, highest and lowest, deduplicated). They never create, start, resume or submit an assessment attempt, and do not request instructor question banks. Other intermediate historical attempts and external LTI assessments are not enumerated.
+
+```sh
+myab check --course CODE
+myab test-reviews --course CODE
+myab test-reviews --course CODE --id ATTEMPT_ID --format text
+```
+
+The offline command defaults to JSON. Reviews retain original question HTML, options, question IDs, answer ordering, structured student responses and the visibility flags supplied by Blackboard. Text output includes readable question/option text and original response values; it does not infer hidden correct answers or per-question scores. Images, attachments and other embedded media remain references in JSON and are not downloaded by review archiving.
+
+Pagination, question identities and the advertised question count are checked before replacing an attempt snapshot. Denied, malformed or incomplete reviews make the sync partial and retain the previous successful snapshot. Check the separate `assessment-reviews` section freshness; a successful gradebook read does not prove questions were archived. Old archived reviews are retained when a reference disappears, with historical provenance. A missing test-review table in an older read-only database yields no reviews; run a scoped check to upgrade and collect them. The first writable upgrade backs up the SQLite database.
+
+Course exports include private `_course-data/assessment-reviews.json` and `assessment-reviews.md`. An explicitly requested vault merge adds `MyAberdeen/Assessment-reviews.md` and an index link. Test questions, answers and grades are private runtime data: never include them in source control, public fixtures or shared diagnostics.

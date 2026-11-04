@@ -13,7 +13,7 @@ This is a terminal-native MyAberdeen archive client for University of Aberdeen u
 
 ## Safety and scope
 
-- Treat Blackboard as read-only. Do not add write, submit, delete, enrolment, messaging, or assessment-attempt operations.
+- Treat Blackboard as read-only. Do not add write, submit, delete, enrolment, messaging, or assessment-attempt creation/modification operations. Read-only reviews of existing completed attempts are supported.
 - Never print, log or commit cookies, SSO credentials, XSRF tokens or request headers containing secrets. Only the dedicated private Chrome profile may persist authentication state as documented; never export it into archives or shared files.
 - Keep the browser profile and database outside the repository, in the user's local application-data directory with private permissions.
 - Be conservative with request concurrency and retries. This is a personal archive utility, not a crawler.

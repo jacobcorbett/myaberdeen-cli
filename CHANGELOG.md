@@ -6,6 +6,10 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 ## [Unreleased]
 
+### Added
+
+- Archive completed test reviews during scoped Blackboard syncs, including question text, options, student responses and released feedback. Add offline `test-reviews` JSON/text output and private export/vault notes. Validate question pagination/counts and preserve previous snapshots on denied or incomplete reads; correct answers and per-question scores remain subject to Blackboard visibility. Coverage is limited to gradebook-referenced completed test attempts; embedded media remains linked.
+
 ## [0.3.4] - 2026-11-04
 
 ### Removed

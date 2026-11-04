@@ -199,7 +199,7 @@ test('temporary course fetch failures remain stale while real denials are inacce
     const course = brief(db, { databasePath: db.path }, ['c']).courses[0];
     assert.equal(result.status, 'partial');
     assert.equal(course.stale, status === 503);
-    assert.equal(course.inaccessibleSections.length, status === 403 ? 6 : 0);
+    assert.equal(course.inaccessibleSections.length, status === 403 ? 7 : 0);
   }
 });
 

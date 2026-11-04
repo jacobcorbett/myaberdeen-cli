@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { safeFilename } from './downloads.js';
 import { atomicWrite } from './io.js';
+import { getAssessmentReviews, renderAssessmentReviews } from './assessment-reviews.js';
 import { exportRecordings } from './panopto-data.js';
 
 const DATASETS = [
@@ -30,6 +31,10 @@ export function exportArchive(database, config, { courseIds } = {}) {
       writeJson(path.join(dataDirectory, filename), rows);
     }
     writeJson(path.join(dataDirectory, 'freshness.json'), { sections: database.sections(course.id), records: database.db.prepare('SELECT dataset,record_id,presence,last_seen_at,last_changed_at FROM record_state WHERE course_id=? ORDER BY dataset,record_id').all(course.id) });
+    const reviews = getAssessmentReviews(database, [course.id]);
+    counts.assessment_reviews = reviews.length;
+    writeJson(path.join(dataDirectory, 'assessment-reviews.json'), reviews);
+    writeText(path.join(dataDirectory, 'assessment-reviews.md'), renderAssessmentReviews(reviews));
     const files = database.db.prepare(`SELECT content_id,title,source_url,local_path,sha256,byte_size,synced_at
       FROM files WHERE course_id=? ORDER BY title`).all(course.id).map(row => ({ ...row, _archive: database.fileState(course.id, row.content_id) }));
     counts.files = files.length;
