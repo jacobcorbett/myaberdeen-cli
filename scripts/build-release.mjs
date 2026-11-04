@@ -38,8 +38,13 @@ try {
   await fs.mkdir(app, { recursive: true });
   await fs.mkdir(runtime, { recursive: true });
   // Explicit allowlist: never copy the working tree, home, profile or course archive wholesale.
-  for (const item of ['src', 'skills', 'docs', '.node-version', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'LICENSE', 'AGENTS.md', 'config.example.json', 'package.json', 'package-lock.json']) {
+  for (const item of ['src', 'skills', '.node-version', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'LICENSE', 'AGENTS.md', 'config.example.json', 'package.json', 'package-lock.json']) {
     await fs.cp(path.join(root, item), path.join(app, item), { recursive: true });
+  }
+  // Markdown guides only: README/demo media stays in the source repository to keep bundles small.
+  await fs.mkdir(path.join(app, 'docs'));
+  for (const entry of await fs.readdir(path.join(root, 'docs'), { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith('.md')) await fs.copyFile(path.join(root, 'docs', entry.name), path.join(app, 'docs', entry.name));
   }
   const npm = platform === 'win32' ? 'npm.cmd' : 'npm';
   execFileSync(npm, ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: app, stdio: 'inherit', shell: platform === 'win32' });

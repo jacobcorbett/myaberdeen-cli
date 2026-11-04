@@ -2,6 +2,20 @@
 
 [← Back to the README](../README.md)
 
+## Checks, lint and coverage
+
+```sh
+npm ci
+npm run check     # runtime check, syntax check, ESLint, then the test suite
+npm run lint      # ESLint only (flat config in eslint.config.js)
+npm test          # test suite only
+npm run coverage  # tests with Node's built-in line/branch/function coverage for src/
+```
+
+Each script first checks the Node version against the supported runtime policy and stops with a clear message if dependencies are missing; run `npm ci` in that case. ESLint and its configuration packages are development dependencies only and are never included in portable downloads. Coverage is reported for information; it has no failing threshold.
+
+Dependabot checks npm dependencies and pinned GitHub Actions weekly, grouping minor and patch updates.
+
 ## Build portable downloads yourself
 
 From a source checkout with the supported Node version installed:
@@ -13,7 +27,7 @@ npm run build:release
 npm run smoke:release
 ```
 
-The build targets the current OS/CPU and downloads the matching official Node distribution for the exact version pinned in `.node-version` (26.13.0), independently of the build host version, verifying its published SHA-256. Internet access, npm and `tar` (macOS/Linux) or PowerShell (Windows) are required. Outputs go to ignored `dist/`. An explicit source allowlist excludes local profiles, archives and configuration; the project MIT licence, security policy, contribution guide, and dependency/Node licence files are included. The smoke check extracts the archive into a temporary path containing spaces and exercises the actual launcher, bundled dependencies and SQLite with synthetic data, without university credentials.
+The build targets the current OS/CPU and downloads the matching official Node distribution for the exact version pinned in `.node-version` (26.13.0), independently of the build host version, verifying its published SHA-256. Internet access, npm and `tar` (macOS/Linux) or PowerShell (Windows) are required. Outputs go to ignored `dist/`. An explicit source allowlist excludes local profiles, archives and configuration, and copies only the Markdown guides from `docs/` (README and demo images, video and the demo fixture remain in the repository); the project MIT licence, security policy, contribution guide, and dependency/Node licence files are included. The smoke check extracts the archive into a temporary path containing spaces and exercises the actual launcher, bundled dependencies and SQLite with synthetic data, without university credentials.
 
 ## Making releases
 

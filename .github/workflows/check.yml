@@ -34,3 +34,5 @@ jobs:
           package-manager-cache: false
       - run: npm ci --ignore-scripts
       - run: npm run audit:security
+      - name: Compile README artwork script
+        run: python3 -m py_compile scripts/render-readme.py

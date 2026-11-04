@@ -8,8 +8,10 @@
     "myab": "./src/cli.js"
   },
   "scripts": {
-    "test": "node --test",
-    "check": "node scripts/check.mjs && node --test",
+    "test": "node scripts/check-runtime.mjs && node --test",
+    "lint": "node scripts/check-runtime.mjs --dev && eslint .",
+    "coverage": "node scripts/check-runtime.mjs && node --test --experimental-test-coverage --test-coverage-include=\"src/**\" --test-coverage-include-all",
+    "check": "node scripts/check.mjs && eslint . && node --test",
     "build:release": "node scripts/build-release.mjs",
     "smoke:release": "node scripts/smoke-release.mjs",
     "audit:security": "npm audit --omit=dev --audit-level=low && node scripts/audit-runtime.mjs"
@@ -21,5 +23,10 @@
     "parse5": "8.1.0",
     "playwright-core": "1.64.1"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "globals": "17.13.0"
+  }
 }

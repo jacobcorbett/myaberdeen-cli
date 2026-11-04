@@ -44,6 +44,8 @@ npm run audit:security
 git diff --check
 ```
 
+`npm run check` runs the syntax check, ESLint and the test suite. Use `npm run lint` to run ESLint alone and `npm run coverage` to see test coverage for `src/`.
+
 For packaging or launcher changes, also build and test an extracted portable package:
 
 ```sh
