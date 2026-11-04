@@ -1,0 +1,25 @@
+{
+  "synthetic": true,
+  "scenes": [
+    {
+      "title": "01 / Read your local archive",
+      "note": "After login, setup and a scoped refresh. No browser needed here.",
+      "command": "myab brief --active --json | jq '.courses[] | {code, name, stale}'",
+      "output": "{\n  \"code\": \"CS1000_27\",\n  \"name\": \"Example Computing\",\n  \"stale\": false\n}\n"
+    },
+    {
+      "title": "02 / Find a moment in a lecture",
+      "note": "Search the captions already saved in your archive.",
+      "command": "myab recordings --course CS1000_27 --search \"byte\" |\n  jq '.[] | {title, matches: [.matches[] | {start, text}]}'",
+      "output": "{\n  \"title\": \"How computers represent information\",\n  \"matches\": [\n    {\n      \"start\": 12,\n      \"text\": \"Eight bits form a byte, giving 256 possible combinations.\"\n    }\n  ]\n}\n"
+    },
+    {
+      "title": "03 / Read the transcript offline",
+      "note": "Caption timestamps stay attached to the text.",
+      "command": "myab transcript --course CS1000_27 \\\n  --id 11111111-1111-1111-1111-111111111111",
+      "output": "[00:00:00.000] Welcome. Today we will look at binary representation.\n[00:00:05.000] A bit can hold one of two values: zero or one.\n[00:00:12.000] Eight bits form a byte, giving 256 possible combinations.\n[00:00:20.000] We can use those patterns to represent numbers and text.\n"
+    }
+  ],
+  "index": "---\ntype: uni\nscope: module\ncourse: CS1000_27\ntags:\n  - myaberdeen\n  - offline-archive\n---\n# Example Computing — MyAberdeen archive\n\n- Blackboard course ID: `_demo_1`\n- Term: 2026-27\n- Raw archive: [Open folder](file:///demo/downloads/2026-27/CS1000_27)\n- SQLite: `/demo/state/myaberdeen.sqlite`\n\n## Offline sections\n\n- [Content](Content.md) — 1 records\n- [Files](Files.md) — 0 records\n- [Recordings](Recordings.md) — 1 Panopto recordings\n- [Announcements](Announcements.md) — 1\n- [Gradebook](Gradebook.md) — 0\n- [Messages](Messages.md) — 0 messages in 0 conversations\n- [Discussions](Discussions.md) — 0 posts\n- [Schedule](Schedule.md) — 0 entries\n\n",
+  "transcript": "# How computers represent information\n\n[Open recording](https://abdn.cloud.panopto.eu/Panopto/Pages/Viewer.aspx?id=11111111-1111-1111-1111-111111111111)\n\nDuration: 2700 seconds\n\n## AI-generated summary\n\nNot available.\n\n## Chapters\n\n- [00:00:00.000](https://abdn.cloud.panopto.eu/Panopto/Pages/Viewer.aspx?id=11111111-1111-1111-1111-111111111111&start=0) Introduction\n- [00:00:12.000](https://abdn.cloud.panopto.eu/Panopto/Pages/Viewer.aspx?id=11111111-1111-1111-1111-111111111111&start=12) Binary representation\n\n## Transcript\n\nAutomatic captions may contain errors.\n\n### English\n\n[00:00:00.000](https://abdn.cloud.panopto.eu/Panopto/Pages/Viewer.aspx?id=11111111-1111-1111-1111-111111111111&start=0) Welcome. Today we will look at binary representation.\n[00:00:05.000](https://abdn.cloud.panopto.eu/Panopto/Pages/Viewer.aspx?id=11111111-1111-1111-1111-111111111111&start=5) A bit can hold one of two values: zero or one.\n[00:00:12.000](https://abdn.cloud.panopto.eu/Panopto/Pages/Viewer.aspx?id=11111111-1111-1111-1111-111111111111&start=12) Eight bits form a byte, giving 256 possible combinations.\n[00:00:20.000](https://abdn.cloud.panopto.eu/Panopto/Pages/Viewer.aspx?id=11111111-1111-1111-1111-111111111111&start=20) We can use those patterns to represent numbers and text.\n"
+}

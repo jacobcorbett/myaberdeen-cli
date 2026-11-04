@@ -6,6 +6,10 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 ## [Unreleased]
 
+### Changed
+
+- Refresh the README with original artwork, a synthetic-data terminal demo, an optional Obsidian export preview and a shorter quick start. Move detailed operational guidance into linked documentation, included in portable bundles.
+
 ## [0.3.3] - 2026-11-03
 
 ### Security
