@@ -6,9 +6,21 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-04
+
 ### Changed
 
 - Refresh the README with original artwork, a synthetic-data terminal demo, an optional Obsidian export preview and a shorter quick start. Move detailed operational guidance into linked documentation, included in portable bundles.
+- Word and PowerPoint text extraction no longer needs an external `unzip` program, so it now works on a standard Windows installation. A built-in reader handles ordinary stored and compressed documents and rejects encrypted, ZIP64, malformed or oversized archives with a clear message. `doctor` no longer suggests installing `unzip`.
+- Generated vault indexes use correct singular and plural counts, such as “1 record” rather than “1 records”, and the announcement and gradebook counts are labelled. Recording durations display as `45:00` or `1:02:03` instead of a number of seconds.
+- Portable bundles include the Markdown guides but no longer carry the README images and demo video (about 740 KB). View them on GitHub.
+- Development checks now include ESLint, `npm run coverage` reports built-in Node test coverage, and Dependabot proposes weekly npm and GitHub Actions updates. `npm test` checks the Node version and installed packages first, so an unsupported runtime or a missing `npm ci` gives a clear message instead of a module-resolution error.
+
+### Fixed
+
+- PowerPoint text was cached in alphabetical slide order (1, 10, 11, 12, 2, …) for decks with ten or more slides. Slides are now read in numeric order. The text extractor version is now `text-v2`, so the next `myab extract` rebuilds older cached text automatically.
+- Download deduplication now applies configured `courseAliases` when no canonical course code is supplied, matching the vault course code.
+- A failure to remove a temporary file no longer hides the original write or download error.
 
 ## [0.3.3] - 2026-11-03
 
@@ -115,7 +127,8 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 - Node SQLite warning handling in command-error checks, database cleanup before removing Windows fixtures, and Windows launcher quoting in the portable smoke check.
 
-[Unreleased]: https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.4
 [0.3.3]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.3
 [0.3.2]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.2
 [0.3.1]: https://github.com/jacobcorbett/myaberdeen-cli/releases/tag/v0.3.1
