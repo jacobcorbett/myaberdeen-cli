@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 Entries describe what changed for users, why it changed, and any limits or upgrade steps. Releases are listed newest first; work that has not shipped belongs under Unreleased.
 
+## [0.4.0](https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.3.4...v0.4.0) (2026-11-04)
+
+
+### Features
+
+* archive completed Blackboard test reviews ([#1](https://github.com/jacobcorbett/myaberdeen-cli/issues/1)) ([1337d4d](https://github.com/jacobcorbett/myaberdeen-cli/commit/1337d4d9a0c2292d7ab2276030ef76d2bc20b5a0))
+
 ## [Unreleased]
 
 ### Added
