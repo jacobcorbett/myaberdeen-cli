@@ -8,6 +8,10 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 ## [0.3.4] - 2026-11-04
 
+### Removed
+
+- Intel Mac (`macos-x64`) portable downloads and release builds. Portable releases now cover Apple Silicon Macs, Linux x64 and Windows x64. Earlier Intel Mac downloads remain available on their original releases but receive no updates.
+
 ### Changed
 
 - Refresh the README with original artwork, a synthetic-data terminal demo, an optional Obsidian export preview and a shorter quick start. Move detailed operational guidance into linked documentation, included in portable bundles.

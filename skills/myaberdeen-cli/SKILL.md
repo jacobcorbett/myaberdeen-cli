@@ -9,7 +9,7 @@ Use `myab` for read-only Blackboard access and a local SQLite/file archive. Univ
 
 ## Portable releases
 
-For users who want a download without installing Node/npm, use the matching asset from https://github.com/jacobcorbett/myaberdeen-cli/releases/latest: `macos-arm64`, `macos-x64`, `linux-x64` or `windows-x64`. Verify the adjacent SHA-256, extract the entire folder, and run `./myab` (macOS/Linux) or `.\myab.cmd` (Windows). Keep `lib/` beside the launcher; add the bundle directory to PATH rather than linking only the launcher. Chrome is still required; optional extractors are separate.
+For users who want a download without installing Node/npm, use the matching asset from https://github.com/jacobcorbett/myaberdeen-cli/releases/latest: `macos-arm64` (Apple Silicon), `linux-x64` or `windows-x64`. Intel Macs are not supported. Verify the adjacent SHA-256, extract the entire folder, and run `./myab` (macOS/Linux) or `.\myab.cmd` (Windows). Keep `lib/` beside the launcher; add the bundle directory to PATH rather than linking only the launcher. Chrome is still required; optional extractors are separate.
 
 The bundle contains `BUILD.json`, `lib/app/README.md`, `lib/app/config.example.json` and this skill under `lib/app/skills/myaberdeen-cli/`. Follow sign-in, configuration and scoped-operation guidance below. Node/npm/Git are only needed for the source route. Bundles are unsigned/not notarised; Windows state relies on inherited user-directory ACLs.
 

@@ -9,7 +9,6 @@ Download the archive for your computer from [GitHub Releases](https://github.com
 | Computer | Asset suffix | Command after extracting |
 | --- | --- | --- |
 | Mac with Apple Silicon | `macos-arm64.tar.gz` | `./myab help` |
-| Intel Mac | `macos-x64.tar.gz` | `./myab help` |
 | Linux x64 | `linux-x64.tar.gz` | `./myab help` |
 | Windows x64 | `windows-x64.zip` | `.\myab.cmd help` |
 

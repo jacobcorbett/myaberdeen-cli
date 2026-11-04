@@ -37,7 +37,7 @@ The build targets the current OS/CPU and downloads the matching official Node di
 
 The Release workflow runs tests, builds and smoke-checks each archive on its native platform, and publishes the release with all downloads/checksums only when every build succeeds. Manual publishing requires an existing `vX.Y.Z` tag matching the package version. GitHub's source archives and the normal source-install route remain available.
 
-Release jobs use the exact Node 26.13.0 pin in `.node-version`. Platform checks run on macOS ARM64, macOS Intel, Linux x64 and Windows x64. Live authentication is deliberately excluded from CI. Only the repository owner can run the release jobs. Existing release assets are never overwritten by the workflow; `BUILD.json` records the exact runtime and commit used.
+Release jobs use the exact Node 26.13.0 pin in `.node-version`. Platform checks run on macOS ARM64 (Apple Silicon), Linux x64 and Windows x64. Intel Macs are not supported. Live authentication is deliberately excluded from CI. Only the repository owner can run the release jobs. Existing release assets are never overwritten by the workflow; `BUILD.json` records the exact runtime and commit used.
 
 ## Security checks
 

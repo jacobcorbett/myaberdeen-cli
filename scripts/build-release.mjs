@@ -13,7 +13,9 @@ if (runtimeVersion !== RELEASE_NODE) throw new Error('.node-version must match t
 assertSupportedRuntime(runtimeVersion);
 const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
 const platform = process.platform, arch = process.arch;
-if (!['darwin', 'linux', 'win32'].includes(platform) || !['arm64', 'x64'].includes(arch)) throw new Error('Unsupported release platform/architecture.');
+// Portable bundles: Apple Silicon macOS, Linux x64 and Windows x64. Intel Macs are not supported.
+const supported = { darwin: ['arm64'], linux: ['x64'], win32: ['x64'] };
+if (!supported[platform]?.includes(arch)) throw new Error('Unsupported release platform/architecture.');
 const tag = process.env.RELEASE_TAG || `v${pkg.version}`;
 if (tag !== `v${pkg.version}`) throw new Error(`Release tag ${tag} does not match package version v${pkg.version}.`);
 const platformName = { darwin: 'macos', linux: 'linux', win32: 'windows' }[platform];
