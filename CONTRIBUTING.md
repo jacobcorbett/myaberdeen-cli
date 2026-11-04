@@ -31,6 +31,8 @@ For a public repository, you can fork and submit a PR without collaborator acces
 
 7. Open a pull request from your fork's branch to `jacobcorbett/myaberdeen-cli:main`. Link the issue, explain the resulting behaviour, list the checks you ran and call out any limitations. Jacob reviews and merges accepted changes; approval alone does not grant you merge access.
 
+Use Conventional Commit PR titles and preserve that title when squash merging; release automation derives version bumps from the merged commit. Do not bump package versions in feature PRs: the owner reviews and merges the generated release PR when ready to ship. See [release operations](docs/development.md#making-releases).
+
 Use concise commit prefixes such as `feat:`, `fix:`, `docs:`, `chore:` or `refactor:`. Keep unrelated changes in separate PRs. Do not change the version, create upstream release tags or publish release assets as part of a contribution unless Jacob asks.
 
 ## Local checks

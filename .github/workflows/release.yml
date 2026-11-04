@@ -46,6 +46,7 @@ jobs:
           package-manager-cache: false
       - run: npm ci --ignore-scripts
       - run: npm run check
+      - run: npm run audit:security
       - run: npm run build:release
         env:
           RELEASE_TAG: ${{ startsWith(env.BUILD_REF, 'v') && env.BUILD_REF || '' }}
@@ -78,6 +79,8 @@ jobs:
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected a stable vX.Y.Z tag'; exit 1; }
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" dist/*
+            # Release Please creates a draft; publish only after every build passed.
+            gh release edit "$RELEASE_TAG" --draft=false --latest
           else
             gh release create "$RELEASE_TAG" dist/* --verify-tag --title "MyAberdeen CLI $RELEASE_TAG" --generate-notes
           fi
