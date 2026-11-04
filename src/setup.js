@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { atomicWrite, throwIfAborted } from './io.js';
 import { courseCode, normaliseAvailability } from './api.js';

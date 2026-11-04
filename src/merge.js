@@ -6,8 +6,12 @@ import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { safeFilename } from './downloads.js';
 import { atomicWrite } from './io.js';
-import { getRecordings } from './panopto-data.js';
+import { formatDuration, getRecordings } from './panopto-data.js';
 import { baseCourseCode, courseDirectories as findCourseDirectories, resolveCourseDirectory } from './course-paths.js';
+
+export function pluralise(n, noun, plural) {
+  return `${n} ${n === 1 ? noun : plural || noun.replace(/(?<![aeiou])y$/, 'ie') + 's'}`;
+}
 
 export function mergeVault(database, config, { deduplicate = true, courseIds, dryRun = false } = {}) {
   const uniRoot = requireVault(config);
@@ -110,14 +114,14 @@ function writeCourseIntegration(database, config, course, directory) {
     `- Raw archive: [Open folder](${fileLink(rawDirectory)})`,
     `- SQLite: \`${config.databasePath}\``, '',
     '## Offline sections', '',
-    `- [Content](Content.md) — ${content.length} records`,
-    `- [Files](Files.md) — ${files.length} records`,
-    `- [Recordings](Recordings.md) — ${recordings.length} Panopto recordings`,
-    `- [Announcements](Announcements.md) — ${announcements.length}`,
-    `- [Gradebook](Gradebook.md) — ${grades.length}`,
-    `- [Messages](Messages.md) — ${messages.length} messages in ${conversations.length} conversations`,
-    `- [Discussions](Discussions.md) — ${discussions.length} posts`,
-    `- [Schedule](Schedule.md) — ${schedules.length} entries`, ''
+    `- [Content](Content.md) — ${pluralise(content.length, 'record')}`,
+    `- [Files](Files.md) — ${pluralise(files.length, 'record')}`,
+    `- [Recordings](Recordings.md) — ${pluralise(recordings.length, 'Panopto recording')}`,
+    `- [Announcements](Announcements.md) — ${pluralise(announcements.length, 'announcement')}`,
+    `- [Gradebook](Gradebook.md) — ${pluralise(grades.length, 'grade')}`,
+    `- [Messages](Messages.md) — ${pluralise(messages.length, 'message')} in ${pluralise(conversations.length, 'conversation')}`,
+    `- [Discussions](Discussions.md) — ${pluralise(discussions.length, 'post')}`,
+    `- [Schedule](Schedule.md) — ${pluralise(schedules.length, 'entry')}`, ''
   ]);
   writeMarkdown(path.join(target, 'Content.md'), renderContent(course, content));
   writeMarkdown(path.join(target, 'Files.md'), renderFiles(course, files));
@@ -125,7 +129,7 @@ function writeCourseIntegration(database, config, course, directory) {
     'Automatic captions and AI summaries may contain errors. Linked recordings do not establish a complete folder inventory.', '',
     ...recordings.flatMap(record => [`## ${escapeMarkdown(record.title)}`, '',
       `[Watch](${record.url}) · [Offline transcript](${fileLink(path.join(rawDirectory, 'recordings', record.id, 'README.md'))})`, '',
-      `Duration: ${Math.round(record.duration)} seconds. Caption languages: ${Object.keys(record.transcripts || {}).join(', ') || 'none'}. Visibility: ${record.presence}.`, '',
+      `Duration: ${formatDuration(record.duration)}. Caption languages: ${Object.keys(record.transcripts || {}).join(', ') || 'none'}. Visibility: ${record.presence}.`, '',
       record.aiSummary ? `AI-generated summary: ${escapeMarkdown(record.aiSummary)}` : '', ''])]);
   writeMarkdown(path.join(target, 'Announcements.md'), renderAnnouncements(course, announcements));
   writeMarkdown(path.join(target, 'Gradebook.md'), renderGrades(course, grades));
@@ -236,7 +240,7 @@ function isWithin(target,root){const relative=path.relative(root,target);return 
 function parseJson(value){try{return JSON.parse(value);}catch{return {};}}
 function writeMarkdown(target,lines){atomicWrite(target,Array.isArray(lines)?`${lines.join('\n')}\n`:lines);}
 function cell(value){return escapeMarkdown(value).replace(/\s+/g,' ').trim();}
-function escapeMarkdown(value){return String(value??'').replace(/&/g,'&amp;').replace(/[\\`*_{}\[\]()#!|]/g,'\\$&').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escapeMarkdown(value){return String(value??'').replace(/&/g,'&amp;').replace(/[\\`*_{}[\]()#!|]/g,'\\$&').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fileLink(value){return pathToFileURL(value).href.replace(/\(/g,'%28').replace(/\)/g,'%29');}
 function formatBytes(value){if(value==null)return 'unknown size';if(value<1024)return `${value} B`;if(value<1048576)return `${(value/1024).toFixed(1)} KiB`;return `${(value/1048576).toFixed(1)} MiB`;}
 

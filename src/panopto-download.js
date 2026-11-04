@@ -67,6 +67,7 @@ export async function downloadRecording({ client, database, config, courseId, id
   } finally {
     await handle?.close();
     if (response?.body && !response.body.locked) await response.body.cancel().catch(() => {});
-    try { fs.unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    // Best-effort cleanup must not replace an earlier download or verification error.
+    try { fs.unlinkSync(temporary); } catch { /* A leftover temporary file is harmless and is never catalogued. */ }
   }
 }

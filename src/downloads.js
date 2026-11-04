@@ -3,18 +3,10 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { parseFragment } from 'parse5';
 import { atomicWrite, fileMatches } from './io.js';
+import { baseCourseCode, safeFilename } from './course-paths.js';
 
-export function safeFilename(value, fallback = 'untitled') {
-  const cleaned = String(value || fallback)
-    .normalize('NFKC')
-    .replace(/[\u0000-\u001f\u007f/\\:*?"<>|]/g, '-')
-    .replace(/\s+/g, ' ')
-    .replace(/^[. -]+|[. ]+$/g, '')
-    .slice(0, 180);
-  let bounded = cleaned;
-  while (Buffer.byteLength(bounded) > 180) bounded = bounded.slice(0, -1);
-  return bounded || 'untitled';
-}
+// Re-exported so existing importers keep one stable path-safety entry point.
+export { safeFilename };
 
 export function isBlackboardFile(item) {
   const handler = item?.contentHandler?.id || item?.contentHandler || item?.type || '';
@@ -57,7 +49,7 @@ export function embeddedFiles(item, baseUrl) {
   return [...found.values()];
 }
 
-export async function downloadContentFile({ session, database, downloadRoot, course, termName, item, canonicalCourseCode }) {
+export async function downloadContentFile({ session, database, downloadRoot, course, termName, item, canonicalCourseCode, config = {} }) {
   const fileMetadata = item?.contentDetail?.['resource/x-bb-file']?.file || {};
   const sourceUrl = sourceRoute(course.id, item);
   const previous = database.getFile?.(course.id, item.id);
@@ -79,7 +71,7 @@ export async function downloadContentFile({ session, database, downloadRoot, cou
     database.upsertFile({ courseId: course.id, contentId: item.id, title: filename, sourceUrl, localPath: target, sha256: incomingHash, byteSize: result.body.length });
     database.setFileValidators?.(course.id, item.id, result);
   };
-  const canonical = database.findLocalFileByHash(incomingHash, canonicalCourseCode || baseCourseCode(course.courseId || course.externalId || course.id));
+  const canonical = database.findLocalFileByHash(incomingHash, canonicalCourseCode || baseCourseCode(course.courseId || course.externalId || course.id, config));
   if (canonical?.path && fileMatches(canonical.path, incomingHash)) {
     record(canonical.path);
     return { downloaded: false, unchanged: true, deduplicated: true, path: canonical.path, bytes: result.body.length };
@@ -96,11 +88,6 @@ export async function downloadContentFile({ session, database, downloadRoot, cou
   const written = atomicWrite(target, result.body);
   record(target);
   return { downloaded: written, unchanged: !written, path: target, bytes: result.body.length };
-}
-
-function baseCourseCode(value) {
-  const text = String(value || '');
-  return text.match(/^([A-Z]{2}(?:\d{4}|\d{3}[A-Z]))_\d{2}$/)?.[1] || text;
 }
 
 function sha256(buffer) {

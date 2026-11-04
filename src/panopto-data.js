@@ -43,6 +43,14 @@ export function normaliseCaptions(rows) {
     return { start: row.Time, duration: row.CaptionDuration, text: row.Caption };
   }).sort((a, b) => a.start - b.start);
 }
+export function formatDuration(seconds) {
+  const value = seconds === null || seconds === undefined || seconds === '' ? NaN : Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return 'unknown';
+  const total = Math.round(value);
+  const hours = Math.floor(total / 3600), minutes = Math.floor(total % 3600 / 60), secs = total % 60;
+  const pad = n => String(n).padStart(2, '0');
+  return hours ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
+}
 function clock(seconds, separator = '.') {
   const ms = Math.round(seconds * 1000);
   return `${String(Math.floor(ms / 3600000)).padStart(2, '0')}:${String(Math.floor(ms / 60000) % 60).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}${separator}${String(ms % 1000).padStart(3, '0')}`;
@@ -111,7 +119,7 @@ export function exportRecordings(database, courseId, directory) {
     for (const [language, track] of Object.entries(record.transcripts || {})) for (const format of ['text', 'srt', 'vtt']) {
       atomicWrite(path.join(root, `${safeFilename(language)}.${format === 'text' ? 'txt' : format}`), transcriptText(track.captions, format));
     }
-    const lines = [`# ${record.title}`, '', `[Open recording](${record.url})`, '', `Duration: ${record.duration} seconds`,
+    const lines = [`# ${record.title}`, '', `[Open recording](${record.url})`, '', `Duration: ${formatDuration(record.duration)}`,
       '', '## AI-generated summary', '', record.aiSummary || 'Not available.', '', '## Chapters', '',
       ...(record.chapters || []).map(c => `- [${clock(c.start)}](${viewerUrl(record.id, c.start)}) ${c.title}`),
       '', '## Transcript', '', 'Automatic captions may contain errors.', '',

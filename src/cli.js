@@ -248,7 +248,6 @@ async function login() {
     console.log('Persistent headless session verified.');
     console.log('Future commands can run without a visible browser.');
   } finally {
-    authenticatedCookies = null;
     await persistenceSession.close();
   }
 }

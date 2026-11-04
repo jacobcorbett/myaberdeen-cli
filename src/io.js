@@ -8,15 +8,17 @@ export function atomicWrite(target, value, { mode = 0o600 } = {}) {
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
   const temporary = path.join(path.dirname(target), `.${crypto.randomUUID()}.tmp`);
-  let fd;
+  let fd, cleanupError;
   try {
     fd = fs.openSync(temporary, 'wx', mode);
     fs.writeFileSync(fd, body); fs.fsyncSync(fd); fs.closeSync(fd); fd = undefined;
     fs.renameSync(temporary, target);
   } finally {
     if (fd !== undefined) fs.closeSync(fd);
-    try { fs.unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    // Record rather than throw here: throwing from finally would replace the original error.
+    try { fs.unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') cleanupError = error; }
   }
+  if (cleanupError) throw cleanupError;
   return true;
 }
 export function hash(value) { return crypto.createHash('sha256').update(value).digest('hex'); }

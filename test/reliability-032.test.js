@@ -44,7 +44,7 @@ test('bad config keeps help/version available and exposes paths in diagnostic er
 });
 
 test('brief separates optional checks and inaccessible sections from stale metadata', t => {
-  const { root, db } = fixture(t); const run = db.startRun();
+  const { db } = fixture(t); const run = db.startRun();
   for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions']) db.finishSection(run, 'c', section, section === 'messages' ? 'unavailable' : 'completed');
   db.finishSection(run, 'c', 'files', 'limited');
   db.finishSection(run, 'c', 'panopto', 'partial');

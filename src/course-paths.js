@@ -1,6 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { safeFilename } from './downloads.js';
+
+export function safeFilename(value, fallback = 'untitled') {
+  const cleaned = String(value || fallback)
+    .normalize('NFKC')
+    // Control characters are deliberately replaced in filenames.
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f/\\:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .replace(/^[. -]+|[. ]+$/g, '')
+    .slice(0, 180);
+  let bounded = cleaned;
+  while (Buffer.byteLength(bounded) > 180) bounded = bounded.slice(0, -1);
+  return bounded || 'untitled';
+}
 
 export function baseCourseCode(value, config = {}) {
   const text = String(value || '');

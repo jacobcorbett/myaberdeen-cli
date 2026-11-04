@@ -7,7 +7,7 @@ import { fingerprint, throwIfAborted, safeMessage } from './io.js';
 export async function syncArchive({ session, database, config, courseQuery, selectedIds, resumeFrom, limitCourses, limitFiles, downloadFiles = false, deep = false, signal, onProgress = () => {} }) {
   const runId = database.startRun();
   const stats = { courses: 0, selected: 0, inaccessible: 0, downloaded: 0, notModified: 0, unchanged: 0, deferredFiles: 0 };
-  let courses = [];
+  let courses;
   try {
     const { user, memberships, terms } = await getAccountOverview(session);
     database.setMeta('user_id', user.id);
