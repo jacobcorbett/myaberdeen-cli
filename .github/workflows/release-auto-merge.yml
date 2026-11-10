@@ -47,5 +47,7 @@ jobs:
               echo "Release PR #$number is waiting for successful required checks."
               continue
             fi
-            gh pr merge "$number" --squash --match-head-commit "$sha"
+            # The owner-only update rule needs an explicit owner override.
+            # Required checks were verified above; never use this before that guard.
+            gh pr merge "$number" --squash --admin --match-head-commit "$sha"
           done < <(jq -r '.[] | select(.isCrossRepository == false and .isDraft == false) | [.number, .headRefOid] | @tsv' <<< "$prs")
