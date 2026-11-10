@@ -31,9 +31,9 @@ The build targets the current OS/CPU and downloads the matching official Node di
 
 ## Making releases
 
-Release Please prepares releases after owner-authored pushes/merges to `main`. It maintains a release PR containing the version changes in `package.json`, `package-lock.json` and `.release-please-manifest.json`, plus generated release notes in `CHANGELOG.md`. Merge normal feature/fix PRs first; merge the release PR only when ready to ship. Multiple changes can share one release. Do not manually bump versions for each feature PR.
+Release Please prepares releases after owner-authored pushes/merges to `main`. It maintains a release PR containing the version changes in `package.json`, `package-lock.json` and `.release-please-manifest.json`, plus generated release notes in `CHANGELOG.md`. Owner-authored release PRs are squash-merged automatically after all required Linux, macOS, Windows and security checks pass. Each merged feature/fix can therefore trigger a release. Do not manually bump versions for each feature PR.
 
-Use Conventional Commit titles for squash merges: `fix:` proposes a patch and `feat:` proposes a minor version. Before 1.0, `feat!:` or a `BREAKING CHANGE:` footer proposes a minor bump; after 1.0 it proposes a major bump. `docs:`, `chore:` and `ci:` alone do not normally trigger a release. Review the proposed version and notes before merging. Use squash merge with the conventional PR title, or preserve conventional commit messages when using a merge commit.
+Use Conventional Commit titles for squash merges: `fix:` proposes a patch and `feat:` proposes a minor version. Before 1.0, `feat!:` or a `BREAKING CHANGE:` footer proposes a minor bump; after 1.0 it proposes a major bump. `docs:`, `chore:` and `ci:` alone do not normally trigger a release. Review the intended release impact before merging feature/fix PRs. Use squash merge with the conventional PR title, or preserve conventional commit messages when using a merge commit.
 
 Merging the release PR authorises publication. Release Please creates a version tag and a **draft** GitHub release. The tag starts the existing Release workflow, which runs checks, the security audit, builds and extracted-bundle smoke tests on Apple Silicon macOS, Linux x64 and Windows x64. Only after every platform succeeds are all downloads uploaded and the draft published. No npm package is published. Intel Macs are not supported. Existing assets are never overwritten.
 
@@ -44,6 +44,8 @@ The bootstrap records `v0.3.4` as the starting release, so older history is not 
 Owner-only branch/tag rules remain in place. Create a **fine-grained personal access token owned by the repository owner**, limited to this repository, with repository permissions **Contents: Read and write**, **Pull requests: Read and write**, and **Issues: Read and write** (for release labels). Save it as the Actions repository secret `RELEASE_PLEASE_TOKEN`. Renew the secret before the chosen expiry. Never store it in Git or a local configuration file.
 
 This owner credential allows the release branch/tag operations under the existing rules and lets PR/tag events trigger normal CI. The built-in `GITHUB_TOKEN` cannot bypass these rules and does not trigger downstream PR/tag workflows; there is deliberately no fallback. The release preparation workflow and release build/publish workflow only run when both the original actor and rerun actor are the repository owner. A missing or expired token makes preparation fail visibly; it does not weaken the repository rules.
+
+The `Merge checked release PRs` workflow uses the same owner credential after a successful `Check` run. It only merges the same-repository, owner-authored, non-draft release branch targeting `main` with the `autorelease: pending` label. It verifies every required check and matches the checked commit before merging; it never checks out or executes PR code. Keep the four existing CI jobs required on `main`. GitHub's native auto-merge alone cannot bypass the owner-only branch-update rule. The owner can manually dispatch this workflow to retry an existing checked release PR.
 
 ### Failed builds and manual recovery
 

@@ -119,7 +119,7 @@ Inspect `assessment-reviews` section freshness separately from grades. Denied/in
 
 ## Maintainer releases
 
-Release Please maintains a version/changelog PR after owner merges to `main`; use conventional feature/fix commit titles and keep feature PRs free of manual version bumps. Merging the release PR creates a tag and draft release. The Release workflow publishes the downloads only after checks, security audit and all three platform build/smoke checks pass. Owner-only branch/tag protections remain; preparation requires the repository-scoped owner secret `RELEASE_PLEASE_TOKEN`. See `docs/development.md` for permissions, expiry and failed-draft recovery. Do not move tags or overwrite assets.
+Release Please maintains a version/changelog PR after owner merges to `main`; use conventional feature/fix commit titles and keep feature PRs free of manual version bumps. Owner release PRs merge automatically after required Linux, macOS, Windows and security checks pass, using the existing owner release credential. Merging the release PR creates a tag and draft release. The Release workflow publishes the downloads only after checks, security audit and all three platform build/smoke checks pass. Owner-only branch/tag protections remain; preparation and automatic release merging require the repository-scoped owner secret `RELEASE_PLEASE_TOKEN`. See `docs/development.md` for permissions, expiry and failed-draft recovery. Do not move tags or overwrite assets.
 
 ## Class Register
 

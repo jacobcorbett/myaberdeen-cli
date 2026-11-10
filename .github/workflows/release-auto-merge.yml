@@ -1,0 +1,51 @@
+name: Merge checked release PRs
+on:
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
+    branches: [release-please--branches--main--components--myaberdeen-cli]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-auto-merge
+  cancel-in-progress: false
+jobs:
+  merge:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge the owner release PR after required checks pass
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          EVENT_NAME: ${{ github.event_name }}
+          CHECKED_SHA: ${{ github.event.workflow_run.head_sha }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == workflow_dispatch && "$TRIGGERING_ACTOR" != "$REPOSITORY_OWNER" ]]; then
+            echo 'Only the repository owner may dispatch release merging.'
+            exit 1
+          fi
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo '::error::RELEASE_PLEASE_TOKEN is required.'
+            exit 1
+          fi
+          branch='release-please--branches--main--components--myaberdeen-cli'
+          prs=$(gh pr list --state open --base main --head "$branch" \
+            --author "$REPOSITORY_OWNER" --label 'autorelease: pending' \
+            --json number,headRefOid,isCrossRepository,isDraft)
+          while IFS=$'\t' read -r number sha; do
+            if [[ "$EVENT_NAME" == workflow_run && "$sha" != "$CHECKED_SHA" ]]; then
+              echo "Release PR #$number has changed since this check run; waiting for its checks."
+              continue
+            fi
+            if ! gh pr checks "$number" --required; then
+              echo "Release PR #$number is waiting for successful required checks."
+              continue
+            fi
+            gh pr merge "$number" --squash --match-head-commit "$sha"
+          done < <(jq -r '.[] | select(.isCrossRepository == false and .isDraft == false) | [.number, .headRefOid] | @tsv' <<< "$prs")
