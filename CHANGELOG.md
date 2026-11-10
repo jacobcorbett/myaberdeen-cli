@@ -12,6 +12,13 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 - Opt-in Class Register archiving with `--roster` on scoped Blackboard refreshes and an offline `roster` command with JSON/text output. Retain names, course roles, pronouns and record IDs; omit contact details and unrelated profile metadata. Include private exports and optional vault notes, section status and historical membership tracking. Denied or incomplete reads preserve the previous snapshot. Existing databases receive a private backup before upgrading.
 
+## [0.5.1](https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.5.0...v0.5.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* use owner override for checked release merges ([882c085](https://github.com/jacobcorbett/myaberdeen-cli/commit/882c0854e6eb8758256e67baa567cdc172716a63))
+
 ## [0.5.0](https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.4.0...v0.5.0) (2026-11-10)
 
 
