@@ -298,7 +298,7 @@ test('scoped deduplication keeps a raw file still referenced by an unselected co
 test('resume preserves bounded settings while allowing an explicit new file limit', async () => {
   const { resumedOptions } = await import('../src/cli-options.js');
   const saved = { downloadFiles: true, deep: true, limitFiles: 2 };
-  assert.deepEqual(resumedOptions({ resume: 7 }, saved), { resume: 7, downloadFiles: true, deep: true, limitFiles: 2 });
+  assert.deepEqual(resumedOptions({ resume: 7 }, saved), { resume: 7, downloadFiles: true, roster: false, deep: true, limitFiles: 2 });
   assert.equal(resumedOptions({ resume: 7, limitFiles: 4 }, saved).limitFiles, 4);
   assert.equal(resumedOptions({ resume: 7 }, { downloadFiles: false, deep: false, limitFiles: null }).downloadFiles, false);
 });

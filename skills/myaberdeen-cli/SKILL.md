@@ -120,3 +120,11 @@ Inspect `assessment-reviews` section freshness separately from grades. Denied/in
 ## Maintainer releases
 
 Release Please maintains a version/changelog PR after owner merges to `main`; use conventional feature/fix commit titles and keep feature PRs free of manual version bumps. Merging the release PR creates a tag and draft release. The Release workflow publishes the downloads only after checks, security audit and all three platform build/smoke checks pass. Owner-only branch/tag protections remain; preparation requires the repository-scoped owner secret `RELEASE_PLEASE_TOKEN`. See `docs/development.md` for permissions, expiry and failed-draft recovery. Do not move tags or overwrite assets.
+
+## Class Register
+
+Use `myab check --course CODE --roster` to opt in to Class Register collection; `sync`, `refresh` and `download` also accept `--roster`. Read offline with `myab roster --course CODE [--format json|text]`. Course scope is required, and resume retains the original opt-in. Ordinary refreshes do not collect or update roster data unless requested.
+
+Inspect each course's returned `section.status` and `checked_at`, or roster freshness in `brief`. Never-checked/denied/partial reads do not prove an empty register; failed refreshes retain the previous data. Complete traversal covers only memberships visible to the account. Missing members become historical after a successful complete read and remain labelled in output.
+
+Stored member fields are names, role code/identifier/label, pronouns and membership/course/user IDs plus archive provenance. Name display preferences are enums, not literal names. Contact details, student numbers, avatars, accommodation information and unrelated account metadata are excluded. Private exports include `_course-data/roster.json` and `roster.md`; requested vault merges add `MyAberdeen/Roster.md`. Keep all real roster data, screenshots, identifiers and private paths out of public commits, fixtures, PR descriptions and shared logs. Use synthetic examples only.

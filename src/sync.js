@@ -2,10 +2,11 @@ import { getAllPages, getAccountOverview, courseCode, selectCourses, normaliseAv
 import { isBlackboardFile, downloadContentFile, embeddedFiles } from './downloads.js';
 import { AuthenticationRequiredError } from './browser.js';
 import { baseCourseCode } from './course-paths.js';
+import { syncRoster } from './roster.js';
 import { syncAssessmentReviews } from './assessment-reviews.js';
 import { fingerprint, throwIfAborted, safeMessage } from './io.js';
 
-export async function syncArchive({ session, database, config, courseQuery, selectedIds, resumeFrom, limitCourses, limitFiles, downloadFiles = false, deep = false, signal, onProgress = () => {} }) {
+export async function syncArchive({ session, database, config, courseQuery, selectedIds, resumeFrom, limitCourses, limitFiles, downloadFiles = false, deep = false, roster = false, signal, onProgress = () => {} }) {
   const runId = database.startRun();
   const stats = { courses: 0, selected: 0, inaccessible: 0, downloaded: 0, notModified: 0, unchanged: 0, deferredFiles: 0 };
   let courses;
@@ -20,7 +21,7 @@ export async function syncArchive({ session, database, config, courseQuery, sele
       courses.sort((a, b) => (lastAttempts.get(a.id) || 0) - (lastAttempts.get(b.id) || 0));
     }
     stats.selected = courses.length;
-    database.setScope(runId, courses, { downloadFiles, deep, limitFiles: limitFiles || null });
+    database.setScope(runId, courses, { downloadFiles, deep, roster, limitFiles: limitFiles || null });
     onProgress(`Selected ${courses.length}: ${courses.map(c => `${courseCode(c)} — ${c.name || ''}`).join('; ')}`);
     const budget = { remaining: limitFiles ?? Infinity };
     for (const membership of courses) {
@@ -35,7 +36,7 @@ export async function syncArchive({ session, database, config, courseQuery, sele
         const unavailable = [403, 404].includes(error.status);
         database.courseResult(runId, membership.id, unavailable ? 'inaccessible' : 'partial');
         if (unavailable) stats.inaccessible++;
-        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions', 'assessment-reviews']) database.finishSection(runId, membership.id, section, unavailable ? 'unavailable' : 'partial');
+        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions', 'assessment-reviews', ...(roster ? ['roster'] : [])]) database.finishSection(runId, membership.id, section, unavailable ? 'unavailable' : 'partial');
         onProgress(`Could not access ${courseCode(membership)}: ${safeMessage(error)}`);
         continue;
       }
@@ -43,12 +44,13 @@ export async function syncArchive({ session, database, config, courseQuery, sele
       database.upsertCourse(course, termName);
       if (normaliseAvailability(course) === 0) {
         database.recordSyncError(runId, course.id, 'course', new Error('Course is marked unavailable by Blackboard.'));
-        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions', 'assessment-reviews']) database.finishSection(runId, course.id, section, 'unavailable');
+        for (const section of ['content', 'announcements', 'grades', 'schedule', 'messages', 'discussions', 'assessment-reviews', ...(roster ? ['roster'] : [])]) database.finishSection(runId, course.id, section, 'unavailable');
         database.courseResult(runId, course.id, 'inaccessible'); stats.inaccessible++;
         onProgress(`Unavailable: ${courseCode(course)} — ${course.name || ''}`); continue;
       }
       onProgress(`Syncing ${courseCode(course)} — ${course.name || ''}`);
       const context = { session, database, config, course, termName, runId, deep, signal, onProgress };
+      if (roster) await section(context, 'roster', () => syncRoster(context));
       const content = await section(context, 'content', () => syncContent(context), { forums: [] });
       await section(context, 'announcements', async () => {
         const items = await pages(context, `/announcements?sort=startDateRestriction(desc)`);

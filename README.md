@@ -31,6 +31,8 @@ The demo uses actual CLI output from a synthetic local archive after setup and r
 | Accessible Panopto recordings and captions | Search saved transcripts, follow timestamped links and explicitly download permitted videos. |
 | JSON, extracted text and generated Markdown | Query with scripts or an AI assistant, and optionally export into Obsidian. |
 
+Class Register is available with `myab check --course CODE --roster`, then `myab roster --course CODE --format text` offline. Collection is opt-in; names, roles, pronouns and record IDs stay in the private archive. See [Class Register usage and limits](docs/usage.md#class-register).
+
 Completed test reviews are archived during scoped `check`, `sync` and `refresh`: question text, answer options and your responses, plus any feedback Blackboard releases. Read them offline with `myab test-reviews --course CODE --format text`. See [test review coverage and limits](docs/usage.md#completed-test-reviews).
 
 Panopto is opt-in. Linked/searchable recordings do not guarantee a complete folder inventory, and available grades or schedules do not guarantee a complete assessment calendar.

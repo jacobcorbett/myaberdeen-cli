@@ -2,7 +2,7 @@ import { fingerprint } from './io.js';
 import { normaliseAvailability } from './api.js';
 
 export const DATASETS = ['content', 'announcements', 'grades', 'schedules', 'conversations', 'messages', 'discussion_posts', 'file_candidates'];
-export const SECTION_TABLES = { content: ['content', 'file_candidates'], announcements: ['announcements'], grades: ['grades'], schedule: ['schedules'], messages: ['conversations', 'messages'], discussions: ['discussion_posts'], panopto: ['recordings'], 'assessment-reviews': ['assessment_reviews'] };
+export const SECTION_TABLES = { content: ['content', 'file_candidates'], announcements: ['announcements'], grades: ['grades'], schedule: ['schedules'], messages: ['conversations', 'messages'], discussions: ['discussion_posts'], panopto: ['recordings'], 'assessment-reviews': ['assessment_reviews'], roster: ['roster_members'] };
 export function recordKey(table, row) { return table === 'messages' ? `${row.conversation_id}:${row.id}` : table === 'discussion_posts' ? `${row.forum_id}:${row.id}` : table === 'file_candidates' ? row.content_id : row.id; }
 
 export function migrateState(archive) {

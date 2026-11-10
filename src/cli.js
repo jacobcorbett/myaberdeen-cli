@@ -19,6 +19,7 @@ import { getRecordings, searchRecordings, transcriptText, recordingId } from './
 import { downloadRecording } from './panopto-download.js';
 
 import { getAssessmentReviews, renderAssessmentReviews } from './assessment-reviews.js';
+import { readRosters, renderRosters } from './roster.js';
 import { setup } from './setup.js';
 
 let config, options, command, release, activeSession;
@@ -93,7 +94,11 @@ async function localCommand() {
     }
     const courses = selected(database.db.prepare('SELECT * FROM courses ORDER BY course_code').all());
     const courseIds = courses.map(c => c.id);
-    if (command === 'test-reviews') {
+    if (command === 'roster') {
+      const rosters = readRosters(database, courses);
+      if (options.format === 'text') process.stdout.write(renderRosters(rosters));
+      else output(rosters);
+    } else if (command === 'test-reviews') {
       let reviews = getAssessmentReviews(database, courseIds);
       if (options.id) {
         if (courseIds.length !== 1) throw new Error('Select exactly one course for an attempt ID.');
@@ -158,10 +163,10 @@ async function runSync() {
       if (options.dryRun || options.term) {
         const { memberships, terms } = await getAccountOverview(session), names = new Map(terms.map(t => [t.id, t.name]));
         const courses = selected(memberships.map(m => { const c = courseFromMembership(m); return { ...c, term_name: names.get(c?.termId) }; }), resumeIds || courseQueries(config, options)).slice(0, options.limitCourses);
-        if (options.dryRun) { output({ dryRun: true, downloadFiles, courses }); return; }
+        if (options.dryRun) { output({ dryRun: true, downloadFiles, roster: !!options.roster, courses }); return; }
         resumeIds = courses.map(c => c.id);
       }
-      const result = await syncArchive({ session, database, config, courseQuery: courseQueries(config, options), selectedIds: resumeIds, resumeFrom: options.resume, limitCourses: options.limitCourses, limitFiles: options.limitFiles, downloadFiles, deep: !!options.deep, signal: controller.signal, onProgress: message => console.error(message) });
+      const result = await syncArchive({ session, database, config, courseQuery: courseQueries(config, options), selectedIds: resumeIds, resumeFrom: options.resume, limitCourses: options.limitCourses, limitFiles: options.limitFiles, downloadFiles, deep: !!options.deep, roster: !!options.roster, signal: controller.signal, onProgress: message => console.error(message) });
       if (options.panopto) {
         const courses = database.db.prepare('SELECT * FROM courses').all().filter(c => result.courseIds.includes(c.id));
         result.panopto = await syncPanopto({ session, database, config, courses, limitRecordings: options.limitRecordings, signal: controller.signal, onProgress: message => console.error(message) });
@@ -199,6 +204,7 @@ Or add --panopto to check/sync/refresh; video downloads remain explicit.
 Panopto read: recordings --course CODE [--search TEXT]; recording --course CODE --id UUID
 Transcript: --course CODE --id UUID [--language NAME] [--format text|json|srt|vtt]
 Panopto download: --course CODE --id UUID [--dry-run] [--max-bytes N] (default 2 GiB)
+Class Register: roster --course CODE [--format json|text]; refresh with check --course CODE --roster
 Test reviews: test-reviews --course CODE [--id ATTEMPT_ID] [--format json|text]
 Read: changes --since <cursor-or-ISO-date> [--limit N]; show --course <code> --id <content-id>
 Relocate: --from <old-root> --to <new-root> [--apply]; destinations are hash-verified
