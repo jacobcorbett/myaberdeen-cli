@@ -5,15 +5,16 @@ const ALLOWED = {
   'panopto-login': [],
   'panopto-sync': [...COMMON, 'headed', 'limit-recordings', 'folder', 'dry-run'],
   recordings: [...COMMON, 'search'],
+  roster: [...COMMON, 'format'],
   'test-reviews': [...COMMON, 'id', 'format'],
   recording: [...COMMON, 'id'],
   transcript: [...COMMON, 'id', 'language', 'format'],
   'panopto-download': [...COMMON, 'id', 'headed', 'dry-run', 'max-bytes'],
   courses: [...COMMON, 'headed', 'limit-courses'],
-  sync: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'download-files', 'dry-run', 'deep', 'resume', 'extract', 'panopto', 'limit-recordings'],
-  check: [...COMMON, 'headed', 'limit-courses', 'dry-run', 'deep', 'resume', 'extract', 'panopto', 'limit-recordings'],
-  download: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'dry-run', 'deep', 'resume', 'extract', 'panopto', 'limit-recordings'],
-  refresh: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'dry-run', 'deep', 'resume', 'extract', 'panopto', 'limit-recordings'],
+  sync: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'download-files', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
+  check: [...COMMON, 'headed', 'limit-courses', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
+  download: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
+  refresh: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
   export: [...COMMON, 'dry-run'], 'merge-vault': [...COMMON, 'dry-run', 'keep-duplicates'],
   extract: COMMON,
   status: COMMON, brief: COMMON, changes: [...COMMON, 'since', 'limit'], show: [...COMMON, 'id'],
@@ -45,10 +46,10 @@ export function parseArgs(args) {
   if (options.active) { if (options.profile) throw new Error('Choose --active or --profile.'); options.profile = 'current'; }
   if (options.all && (options.course || options.term || options.profile)) throw new Error('--all cannot be combined with a narrower selection.');
   if (options.resume && (options.course || options.term || options.profile || options.all)) throw new Error('--resume uses the original bounded selection.');
-  if (['sync', 'check', 'download', 'refresh', 'export', 'merge-vault', 'relocate-files', 'extract', 'panopto-sync', 'panopto-download', 'recordings', 'recording', 'transcript', 'test-reviews'].includes(command) && !options.all && !options.course && !options.term && !options.profile && !options.resume) throw new Error('Choose --course, --term, --profile, --active, or explicitly --all.');
+  if (['sync', 'check', 'download', 'refresh', 'export', 'merge-vault', 'relocate-files', 'extract', 'panopto-sync', 'panopto-download', 'recordings', 'recording', 'transcript', 'test-reviews', 'roster'].includes(command) && !options.all && !options.course && !options.term && !options.profile && !options.resume) throw new Error('Choose --course, --term, --profile, --active, or explicitly --all.');
   if (command === 'relocate-files' && (!options.from || !options.to)) throw new Error('relocate-files requires --from and --to.');
   if (['show', 'recording', 'transcript', 'panopto-download'].includes(command) && !options.id) throw new Error(`${command} requires --id and a course selection.`);
-  if (command === 'test-reviews' && options.format && !['json', 'text'].includes(options.format)) throw new Error('test-reviews --format must be json or text.');
+  if (['test-reviews', 'roster'].includes(command) && options.format && !['json', 'text'].includes(options.format)) throw new Error(`${command} --format must be json or text.`);
   if (options.format && !['json', 'text', 'srt', 'vtt'].includes(options.format)) throw new Error('--format must be json, text, srt or vtt.');
   if (options.limitRecordings && ['sync', 'check', 'refresh', 'download'].includes(command) && !options.panopto) throw new Error('--limit-recordings requires --panopto.');
   if (options.since && !/^\d+$/.test(options.since) && !Number.isFinite(Date.parse(options.since))) throw new Error('--since must be a change cursor or ISO timestamp.');
@@ -63,6 +64,6 @@ export function courseQueries(config, options) {
 }
 
 export function resumedOptions(options, saved) {
-  return { ...options, downloadFiles: !!saved.downloadFiles, deep: options.deep ?? !!saved.deep,
+  return { ...options, downloadFiles: !!saved.downloadFiles, roster: options.roster ?? !!saved.roster, deep: options.deep ?? !!saved.deep,
     limitFiles: options.limitFiles ?? saved.limitFiles ?? undefined };
 }

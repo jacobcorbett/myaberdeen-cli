@@ -110,3 +110,23 @@ The offline command defaults to JSON. Reviews retain original question HTML, opt
 Pagination, question identities and the advertised question count are checked before replacing an attempt snapshot. Denied, malformed or incomplete reviews make the sync partial and retain the previous successful snapshot. Check the separate `assessment-reviews` section freshness; a successful gradebook read does not prove questions were archived. Old archived reviews are retained when a reference disappears, with historical provenance. A missing test-review table in an older read-only database yields no reviews; run a scoped check to upgrade and collect them. The first writable upgrade backs up the SQLite database.
 
 Course exports include private `_course-data/assessment-reviews.json` and `assessment-reviews.md`. An explicitly requested vault merge adds `MyAberdeen/Assessment-reviews.md` and an index link. Test questions, answers and grades are private runtime data: never include them in source control, public fixtures or shared diagnostics.
+
+## Class Register
+
+Class Register collection is opt-in. Add `--roster` to a scoped `check`, `sync`, `refresh` or `download`, then read the local snapshot without opening Chrome:
+
+```sh
+myab check --course EX1000 --roster
+myab roster --course EX1000
+myab roster --course EX1000 --format text
+```
+
+`EX1000` is a synthetic example; use an actual course selector. Repeated `--course`, `--active`, `--profile`, `--term` and explicit `--all` follow the usual scope rules. Resume retains the original roster opt-in. Ordinary refreshes without `--roster` leave the roster and its check time untouched.
+
+JSON output contains one object per selected course, its latest roster `section` status/check time and its `members`. Member records contain membership/course/user IDs, given/family/display names, pronouns where supplied, role code/identifier/label, archive time and presence provenance. Display names are built from the supplied given and family names; Blackboard's `preferredDisplayName` is a setting rather than a name. Custom literal role labels are retained; unresolved localisation keys fall back to a standard role label or identifier.
+
+Only memberships exposed to the signed-in account are read. A completed traversal is not a guarantee that Blackboard exposes every enrolled user. Check `section.status` and `checked_at` before treating a snapshot as current: `never-checked`, `partial` and `unavailable` do not mean an empty register. Failed/incomplete reads preserve the previous successful member data. After a successful complete traversal, disappeared members remain archived with `_archive.presence: historical`; text output labels them. JSON/text are cached views and do not refresh automatically. `brief` exposes roster freshness separately after a roster check.
+
+Expanded email addresses, student numbers, other profile identifiers, avatars, pronunciation media and permission metadata are not stored. No accommodation data is collected. These exclusions also apply to private exports and vault notes. The first writable v5 upgrade makes a private database backup; old read-only archives report the roster as never checked until collected.
+
+Exports add private `_course-data/roster.json` and `roster.md`. An explicitly requested vault merge adds `MyAberdeen/Roster.md` and an index link. These outputs contain personal data: keep them, their backups and diagnostics out of source control and public handoffs. Tests and public examples use synthetic data only.

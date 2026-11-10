@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 Entries describe what changed for users, why it changed, and any limits or upgrade steps. Releases are listed newest first; work that has not shipped belongs under Unreleased.
 
+## Unreleased
+
+### Added
+
+- Opt-in Class Register archiving with `--roster` on scoped Blackboard refreshes and an offline `roster` command with JSON/text output. Retain names, course roles, pronouns and record IDs; omit contact details and unrelated profile metadata. Include private exports and optional vault notes, section status and historical membership tracking. Denied or incomplete reads preserve the previous snapshot. Existing databases receive a private backup before upgrading.
+
 ## [0.4.0](https://github.com/jacobcorbett/myaberdeen-cli/compare/v0.3.4...v0.4.0) (2026-11-04)
 
 

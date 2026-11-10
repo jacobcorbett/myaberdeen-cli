@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { safeFilename } from './downloads.js';
 import { atomicWrite } from './io.js';
 import { getAssessmentReviews, renderAssessmentReviews } from './assessment-reviews.js';
+import { readRosters, renderRosters } from './roster.js';
 import { exportRecordings } from './panopto-data.js';
 
 const DATASETS = [
@@ -31,6 +32,10 @@ export function exportArchive(database, config, { courseIds } = {}) {
       writeJson(path.join(dataDirectory, filename), rows);
     }
     writeJson(path.join(dataDirectory, 'freshness.json'), { sections: database.sections(course.id), records: database.db.prepare('SELECT dataset,record_id,presence,last_seen_at,last_changed_at FROM record_state WHERE course_id=? ORDER BY dataset,record_id').all(course.id) });
+    const rosters = readRosters(database, [course]);
+    counts.roster_members = rosters[0].members.length;
+    writeJson(path.join(dataDirectory, 'roster.json'), rosters[0]);
+    writeText(path.join(dataDirectory, 'roster.md'), renderRosters(rosters));
     const reviews = getAssessmentReviews(database, [course.id]);
     counts.assessment_reviews = reviews.length;
     writeJson(path.join(dataDirectory, 'assessment-reviews.json'), reviews);

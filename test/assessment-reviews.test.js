@@ -111,7 +111,7 @@ test('v3 migration backs up the database and old read-only archives remain reada
   const old = new ArchiveDatabase(filename, { readOnly: true });
   assert.deepEqual(getAssessmentReviews(old, [course.id]), []); old.close();
   const migrated = new ArchiveDatabase(filename);
-  assert.equal(migrated.db.prepare('PRAGMA user_version').get().user_version, 4);
+  assert.equal(migrated.db.prepare('PRAGMA user_version').get().user_version, 5);
   const backup = new DatabaseSync(migrated.backupPath, { readOnly: true });
   assert.equal(backup.prepare('PRAGMA user_version').get().user_version, 3); backup.close(); migrated.close();
 });
