@@ -130,3 +130,25 @@ Only memberships exposed to the signed-in account are read. A completed traversa
 Expanded email addresses, student numbers, other profile identifiers, avatars, pronunciation media and permission metadata are not stored. No accommodation data is collected. These exclusions also apply to private exports and vault notes. The first writable v5 upgrade makes a private database backup; old read-only archives report the roster as never checked until collected.
 
 Exports add private `_course-data/roster.json` and `roster.md`. An explicitly requested vault merge adds `MyAberdeen/Roster.md` and an index link. These outputs contain personal data: keep them, their backups and diagnostics out of source control and public handoffs. Tests and public examples use synthetic data only.
+
+## Offline reading commands
+
+Read the existing local archive with `announcements`, `grades`, `messages` or `discussions`. These commands do not open Chrome, make network requests, refresh data, mark messages read or modify the database. Populate or refresh the relevant course first with a scoped `check` when needed.
+
+```sh
+myab announcements --course EX1000 --format text
+myab grades --course EX1000 --format text
+myab messages --course EX1000 --search "example topic" --format text
+myab discussions --course EX1000 --id EXAMPLE_POST_ID
+myab announcements --active --limit 5
+```
+
+All identifiers and topics above are synthetic examples. Use your actual course selection. Each command requires explicit scope: repeated `--course`, `--term`, `--profile`, `--active` or explicit `--all`. Output defaults to JSON; `--format text` renders readable Markdown. `--json` is also accepted.
+
+JSON is an array of selected courses with `courseId`, `courseCode`, `command`, `section`, `totalItems`, `matchedItems` and `items`. Each item retains its original archived fields plus `_context` and `_archive`. Context supplies normalised titles/dates/authors, grade score/status/due information, message conversation IDs and cached conversation metadata, or discussion forum/thread/parent IDs. Provenance includes archive time and presence. Original HTML and any attachment references remain in JSON; these reading commands do not download attachments. Text output removes HTML/scripts/styles, preserves paragraph breaks, escapes Markdown and removes terminal controls. Missing scores are labelled as not supplied; a zero score remains zero.
+
+`--id ID` matches exact archived record IDs. Message IDs may occur in several conversations and discussion IDs in several forums; all matches remain separate and carry their context. `--search TEXT` is case-insensitive and matches IDs, readable bodies and normalised title/author/context strings. `--limit N` applies separately to each course after filtering. Results are newest first by posted/created time (due date for grades), with undated records last and stable ID/context tie-breaks. Total and matching counts describe the full cached selection before the limit.
+
+Read `section.status`, `checkedAt`, `stale` and `accessible` before using the results as current evidence. Freshness uses the configured `freshnessMinutes` (60 by default). Never-checked, partial or denied sections may have no cached records or retain an older snapshot; neither proves an empty section. Historical records remain visible and labelled. Filtering to no matches is distinguished from having no cached records. Grade output covers archived grades, not a complete assessment catalogue. Message/discussion context does not establish complete conversation or thread coverage when a refresh was partial.
+
+These outputs can contain private course material, grades and correspondence. Do not copy real outputs, screenshots, identifiers or personal paths into public fixtures, commits or PR descriptions.

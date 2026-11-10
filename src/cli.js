@@ -20,6 +20,7 @@ import { downloadRecording } from './panopto-download.js';
 
 import { getAssessmentReviews, renderAssessmentReviews } from './assessment-reviews.js';
 import { readRosters, renderRosters } from './roster.js';
+import { OFFLINE_READ_COMMANDS, readCourseItems, renderCourseItems } from './offline-reading.js';
 import { setup } from './setup.js';
 
 let config, options, command, release, activeSession;
@@ -94,7 +95,11 @@ async function localCommand() {
     }
     const courses = selected(database.db.prepare('SELECT * FROM courses ORDER BY course_code').all());
     const courseIds = courses.map(c => c.id);
-    if (command === 'roster') {
+    if (OFFLINE_READ_COMMANDS.includes(command)) {
+      const result = readCourseItems(database, courses, command, { ...options, freshnessMinutes: config.freshnessMinutes ?? 60 });
+      if (options.format === 'text') process.stdout.write(renderCourseItems(result));
+      else output(result);
+    } else if (command === 'roster') {
       const rosters = readRosters(database, courses);
       if (options.format === 'text') process.stdout.write(renderRosters(rosters));
       else output(rosters);
@@ -204,6 +209,8 @@ Or add --panopto to check/sync/refresh; video downloads remain explicit.
 Panopto read: recordings --course CODE [--search TEXT]; recording --course CODE --id UUID
 Transcript: --course CODE --id UUID [--language NAME] [--format text|json|srt|vtt]
 Panopto download: --course CODE --id UUID [--dry-run] [--max-bytes N] (default 2 GiB)
+Offline reading: announcements|grades|messages|discussions --course CODE [--format json|text]
+Filter offline reading: --id ID, --search TEXT, --limit N (per course)
 Class Register: roster --course CODE [--format json|text]; refresh with check --course CODE --roster
 Test reviews: test-reviews --course CODE [--id ATTEMPT_ID] [--format json|text]
 Read: changes --since <cursor-or-ISO-date> [--limit N]; show --course <code> --id <content-id>

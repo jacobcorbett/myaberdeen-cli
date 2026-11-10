@@ -31,6 +31,8 @@ The demo uses actual CLI output from a synthetic local archive after setup and r
 | Accessible Panopto recordings and captions | Search saved transcripts, follow timestamped links and explicitly download permitted videos. |
 | JSON, extracted text and generated Markdown | Query with scripts or an AI assistant, and optionally export into Obsidian. |
 
+Read saved announcements with `myab announcements --course CODE --format text`; `grades`, `messages` and `discussions` work the same way. JSON output, search, ID filters and per-course limits are also available. See [offline reading commands](docs/usage.md#offline-reading-commands).
+
 Class Register is available with `myab check --course CODE --roster`, then `myab roster --course CODE --format text` offline. Collection is opt-in; names, roles, pronouns and record IDs stay in the private archive. See [Class Register usage and limits](docs/usage.md#class-register).
 
 Completed test reviews are archived during scoped `check`, `sync` and `refresh`: question text, answer options and your responses, plus any feedback Blackboard releases. Read them offline with `myab test-reviews --course CODE --format text`. See [test review coverage and limits](docs/usage.md#completed-test-reviews).
