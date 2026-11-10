@@ -1,6 +1,6 @@
 {
   "name": "myaberdeen-cli",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Terminal-native, read-only MyAberdeen archive client",
   "type": "module",
