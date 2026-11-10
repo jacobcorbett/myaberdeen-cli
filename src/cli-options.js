@@ -1,5 +1,8 @@
+import { OFFLINE_READ_COMMANDS } from './offline-reading.js';
+
 const COMMON = ['course', 'term', 'profile', 'active', 'all', 'json'];
 const ALLOWED = {
+  ...Object.fromEntries(OFFLINE_READ_COMMANDS.map(command => [command, [...COMMON, 'format', 'id', 'search', 'limit']])),
   setup: ['course', 'vault', 'academic-start-year'],
   login: [], paths: [], help: [], version: [],
   'panopto-login': [],
@@ -46,10 +49,10 @@ export function parseArgs(args) {
   if (options.active) { if (options.profile) throw new Error('Choose --active or --profile.'); options.profile = 'current'; }
   if (options.all && (options.course || options.term || options.profile)) throw new Error('--all cannot be combined with a narrower selection.');
   if (options.resume && (options.course || options.term || options.profile || options.all)) throw new Error('--resume uses the original bounded selection.');
-  if (['sync', 'check', 'download', 'refresh', 'export', 'merge-vault', 'relocate-files', 'extract', 'panopto-sync', 'panopto-download', 'recordings', 'recording', 'transcript', 'test-reviews', 'roster'].includes(command) && !options.all && !options.course && !options.term && !options.profile && !options.resume) throw new Error('Choose --course, --term, --profile, --active, or explicitly --all.');
+  if (['sync', 'check', 'download', 'refresh', 'export', 'merge-vault', 'relocate-files', 'extract', 'panopto-sync', 'panopto-download', 'recordings', 'recording', 'transcript', 'test-reviews', 'roster', ...OFFLINE_READ_COMMANDS].includes(command) && !options.all && !options.course && !options.term && !options.profile && !options.resume) throw new Error('Choose --course, --term, --profile, --active, or explicitly --all.');
   if (command === 'relocate-files' && (!options.from || !options.to)) throw new Error('relocate-files requires --from and --to.');
   if (['show', 'recording', 'transcript', 'panopto-download'].includes(command) && !options.id) throw new Error(`${command} requires --id and a course selection.`);
-  if (['test-reviews', 'roster'].includes(command) && options.format && !['json', 'text'].includes(options.format)) throw new Error(`${command} --format must be json or text.`);
+  if (['test-reviews', 'roster', ...OFFLINE_READ_COMMANDS].includes(command) && options.format && !['json', 'text'].includes(options.format)) throw new Error(`${command} --format must be json or text.`);
   if (options.format && !['json', 'text', 'srt', 'vtt'].includes(options.format)) throw new Error('--format must be json, text, srt or vtt.');
   if (options.limitRecordings && ['sync', 'check', 'refresh', 'download'].includes(command) && !options.panopto) throw new Error('--limit-recordings requires --panopto.');
   if (options.since && !/^\d+$/.test(options.since) && !Number.isFinite(Date.parse(options.since))) throw new Error('--since must be a change cursor or ISO timestamp.');
