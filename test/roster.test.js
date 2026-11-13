@@ -145,7 +145,7 @@ test('v4 migration creates a private backup; old offline archives report never c
   const old = new ArchiveDatabase(filename, { readOnly: true });
   assert.equal(readRosters(old, [course])[0].section.status, 'never-checked'); old.close();
   const migrated = new ArchiveDatabase(filename);
-  assert.equal(migrated.db.prepare('PRAGMA user_version').get().user_version, 5);
+  assert.equal(migrated.db.prepare('PRAGMA user_version').get().user_version, 6);
   const backup = new DatabaseSync(migrated.backupPath, { readOnly: true });
   assert.equal(backup.prepare('PRAGMA user_version').get().user_version, 4);
   if (process.platform !== 'win32') assert.equal(fs.statSync(migrated.backupPath).mode & 0o777, 0o600);

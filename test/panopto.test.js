@@ -56,7 +56,7 @@ test('v2 upgrade makes a private backup and retains existing archive',t=>{
  const {db,dir}=archive(t);db.db.exec('PRAGMA user_version=2');db.close();
  const reopened=new ArchiveDatabase(path.join(dir,'test.sqlite'));
  try {
-  assert.equal(reopened.db.prepare('PRAGMA user_version').get().user_version,5);assert.ok(fs.existsSync(reopened.backupPath));
+  assert.equal(reopened.db.prepare('PRAGMA user_version').get().user_version,6);assert.ok(fs.existsSync(reopened.backupPath));
   if(process.platform!=='win32')assert.equal(fs.statSync(reopened.backupPath).mode&0o777,0o600);
  } finally { reopened.close(); }
 });

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { configureHistory, historyStatus, readHistory, pruneHistory } from './content-history.js';
 import { assertSupportedRuntime } from './runtime-policy.js';
 import path from 'node:path';
 import { getConfig, getConfigPaths, ConfigurationError, prepareLocalState, requireVault } from './config.js';
@@ -36,7 +37,7 @@ try {
     config = getConfig();
     if (command === 'setup' && !options.course && !process.stdin.isTTY) throw new Error('Interactive setup needs a terminal. Use myab setup --course <exact-ID/code> (repeatable) for non-interactive setup.');
     const mutates = ['setup', 'login', 'panopto-login', 'panopto-sync', 'panopto-download', 'sync', 'check', 'download', 'refresh', 'repair', 'extract'].includes(command) || ['export', 'merge-vault'].includes(command) && !options.dryRun || command === 'relocate-files' && options.apply;
-    if (mutates) release = acquireLock(config.stateDir);
+    if (mutates || command === 'content-history' && (options.enable || options.disable || options.apply)) release = acquireLock(config.stateDir);
     if (command === 'merge-vault') requireVault(config);
     if (command === 'paths') output(config);
     else if (command === 'setup') {
@@ -86,7 +87,7 @@ function openDatabase(readOnly = false) {
   return database;
 }
 async function localCommand() {
-  const writable = command === 'repair' || command === 'extract' || (['export', 'merge-vault'].includes(command) && !options.dryRun) || command === 'relocate-files' && options.apply;
+  const writable = command === 'content-history' && (options.enable || options.disable || options.apply) || command === 'repair' || command === 'extract' || (['export', 'merge-vault'].includes(command) && !options.dryRun) || command === 'relocate-files' && options.apply;
   const database = openDatabase(!writable);
   try {
     if (command === 'repair') {
@@ -95,7 +96,15 @@ async function localCommand() {
     }
     const courses = selected(database.db.prepare('SELECT * FROM courses ORDER BY course_code').all());
     const courseIds = courses.map(c => c.id);
-    if (OFFLINE_READ_COMMANDS.includes(command)) {
+    if (command === 'content-history') {
+      if (database.db.prepare('PRAGMA user_version').get().user_version < 6) throw new Error('Archive needs migration. Run: myab repair');
+      if (options.enable || options.disable) output(configureHistory(database, courseIds, !!options.enable));
+      else if (options.keep) output(pruneHistory(database, courseIds, options.keep, !!options.apply));
+      else if (options.id) {
+        if (courseIds.length !== 1) throw new Error('Select exactly one course for content history.');
+        output(readHistory(database, courseIds[0], options.id, options.version));
+      } else output(historyStatus(database, courseIds));
+    } else if (OFFLINE_READ_COMMANDS.includes(command)) {
       const result = readCourseItems(database, courses, command, { ...options, freshnessMinutes: config.freshnessMinutes ?? 60 });
       if (options.format === 'text') process.stdout.write(renderCourseItems(result));
       else output(result);
@@ -213,6 +222,8 @@ Offline reading: announcements|grades|messages|discussions --course CODE [--form
 Filter offline reading: --id ID, --search TEXT, --limit N (per course)
 Class Register: roster --course CODE [--format json|text]; refresh with check --course CODE --roster
 Test reviews: test-reviews --course CODE [--id ATTEMPT_ID] [--format json|text]
+History: content-history --active [--enable | --disable | --keep N [--apply]]
+  content-history --course <code> --id <content-id> [--version N]
 Read: changes --since <cursor-or-ISO-date> [--limit N]; show --course <code> --id <content-id>
 Relocate: --from <old-root> --to <new-root> [--apply]; destinations are hash-verified
 Merge: --keep-duplicates; preview generated notes and removals with --dry-run
