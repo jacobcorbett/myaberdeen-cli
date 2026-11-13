@@ -24,7 +24,7 @@ To update a portable installation, download and verify the new matching archive,
 
 ## Install from source and sign in
 
-Use Node **26.13.0 or newer within Node 26**, and an installed Google Chrome. Node 22, 24 and other major versions are unsupported. The exact development and portable-release pin is **26.13.0**, recorded in `.node-version`. Runtime code uses `node:sqlite`; no extra browser is downloaded.
+Use Node **26.13.1 or newer within Node 26**, and an installed Google Chrome. Node 22, 24 and other major versions are unsupported. The exact development and portable-release pin is **26.13.1**, recorded in `.node-version`. Runtime code uses `node:sqlite`; no extra browser is downloaded.
 
 ```sh
 git clone https://github.com/jacobcorbett/myaberdeen-cli.git

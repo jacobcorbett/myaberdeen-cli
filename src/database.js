@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { migrateContentHistory, attachContentHistory } from './content-history.js';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { normaliseAvailability } from './api.js';
@@ -15,8 +16,8 @@ export class ArchiveDatabase {
     const existed = fs.existsSync(databasePath);
     this.db = new DatabaseSync(databasePath, { readOnly });
     if (readOnly) return;
-    if (existed && this.db.prepare('PRAGMA user_version').get().user_version < 5) {
-      const version = 5;
+    if (existed && this.db.prepare('PRAGMA user_version').get().user_version < 6) {
+      const version = 6;
       const backup = `${databasePath}.pre-v${version}-${Date.now()}.bak`;
       this.db.prepare('VACUUM INTO ?').run(backup); fs.chmodSync(backup, 0o600);
       this.backupPath = backup;
@@ -28,6 +29,7 @@ export class ArchiveDatabase {
     migratePanopto(this);
     migrateAssessmentReviews(this);
     migrateRoster(this);
+    migrateContentHistory(this);
   }
 
   migrate() {
@@ -316,3 +318,4 @@ function numericScore(item) {
 }
 
 attachTracking(ArchiveDatabase);
+attachContentHistory(ArchiveDatabase);

@@ -21,7 +21,7 @@ Canonical source: https://github.com/jacobcorbett/myaberdeen-cli.
 
 Find the existing checkout and `myab` executable before cloning another copy. Read that checkout's `README.md`, `package.json` and `myab help`; these are authoritative for the installed revision. Run `myab paths` to resolve local configuration rather than assuming the author's filesystem layout.
 
-For a new install, use Git, npm, Node 26.13.0 or newer within Node 26 (Node 22, 24 and other majors are unsupported; `.node-version` pins 26.13.0), and an installed Google Chrome:
+For a new install, use Git, npm, Node 26.13.1 or newer within Node 26 (Node 22, 24 and other majors are unsupported; `.node-version` pins 26.13.1), and an installed Google Chrome:
 
 ```sh
 git clone https://github.com/jacobcorbett/myaberdeen-cli.git
@@ -55,6 +55,14 @@ Obsidian is optional and has no default vault path. Normal archive commands work
 `--course` is repeatable; exact IDs/codes take precedence over fragments. `--active` uses the configured current profile. Do not substitute `--all` when a profile is missing or a selector fails. Whole-account downloads require the user's intended scope to include them. `courses` queries live memberships; `brief`, `show`, `changes` and `status` use local data.
 
 For incremental monitoring, use `myab changes --active --since CURSOR --json`. Each caller stores its own returned `nextCursor`; reading changes does not consume another caller's results. Refresh on demand; the CLI does not install a background schedule.
+
+## Optional content history
+
+History is off by default. When the user asks to preserve course-page changes, run `myab content-history --active --enable` or an explicit course selection. This seeds cached content without network access and persists per-course opt-in in the database. Future refreshes using an updated CLI retain meaningful content versions atomically; unchanged/view-counter/timestamp-only updates do not add copies. Do not enable it as part of ordinary setup without a request.
+
+`myab content-history --active` reports enabled state, version count and payload bytes (excluding SQLite overhead/backups). List versions with `--course CODE --id CONTENT_ID`, then read original JSON and readable before/after text with `--version N`. Cite observation and capture times and baseline/refresh provenance; detection time is not the actual edit time. Past unrecorded edits and intervening edits cannot be recovered. A baseline is cached evidence, not a new live check. `check --deep` fetches bodies only when the user requests a live check.
+
+`--disable` keeps history. Re-enabling seeds the current cached baseline. `--keep N` previews per-item retention; `--apply` explicitly removes older selected versions. Never apply pruning without the user's instruction. There is no automatic deletion; SQLite file size may not shrink after pruning. Only course content is versioned; exports/vault notes retain current content and downloaded-file history is separate. Keep the private database and migration backups out of Git.
 
 ## Failures and local maintenance
 

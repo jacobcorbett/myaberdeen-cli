@@ -73,7 +73,7 @@ The preview renders section labels and counts from an actual generated `Index.md
 
 ## Regenerate the media
 
-From a **source checkout** with its npm dependencies installed, use Node 26.13.0 or newer within Node 26, Python 3 with Pillow 13, `jq` and FFmpeg with `libx264`:
+From a **source checkout** with its npm dependencies installed, use Node 26.13.1 or newer within Node 26, Python 3 with Pillow 13, `jq` and FFmpeg with `libx264`:
 
 ```sh
 node scripts/readme-fixture.mjs

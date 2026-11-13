@@ -152,3 +152,27 @@ JSON is an array of selected courses with `courseId`, `courseCode`, `command`, `
 Read `section.status`, `checkedAt`, `stale` and `accessible` before using the results as current evidence. Freshness uses the configured `freshnessMinutes` (60 by default). Never-checked, partial or denied sections may have no cached records or retain an older snapshot; neither proves an empty section. Historical records remain visible and labelled. Filtering to no matches is distinguished from having no cached records. Grade output covers archived grades, not a complete assessment catalogue. Message/discussion context does not establish complete conversation or thread coverage when a refresh was partial.
 
 These outputs can contain private course material, grades and correspondence. Do not copy real outputs, screenshots, identifiers or personal paths into public fixtures, commits or PR descriptions.
+
+## Content history
+
+Content history is optional and off by default, including after migration. It records course content pages, their original JSON bodies, titles and other meaningful metadata in the private SQLite database. It does not version announcements, grades, messages, recordings or exports; existing downloaded-file versioning remains separate.
+
+```sh
+myab content-history --active --enable
+myab content-history --active
+myab content-history --course CODE --id CONTENT_ID
+myab content-history --course CODE --id CONTENT_ID --version 42
+myab content-history --active --disable
+myab content-history --active --keep 5
+myab content-history --active --keep 5 --apply
+```
+
+Every command requires `--course`, `--active`, `--profile`, `--term` or explicit `--all`. Enable/disable applies only to selected courses and persists in this archive's database, independently of profiles. Enabling seeds current cached content, including historically retained items; it does not refresh the network. New content and changed content are then retained during normal refreshes. Disabling stops recording and keeps all history. Re-enabling seeds the then-current cached content; changes made while disabled cannot be reconstructed.
+
+Without an action, the command reports enabled state per course, version count and `payloadBytes` (UTF-8 JSON plus provenance bytes, excluding SQLite/index overhead, backups and WAL). With `--id`, select exactly one course to list version IDs and observation metadata. Add `--version N` to return the selected `after` snapshot and its immediately preceding retained `before` snapshot, both with readable `text` and original `item` JSON. The first retained version has `before: null`. Version IDs are archive-wide and may have gaps. These reads are local and do not consume change-feed cursors.
+
+A new version is stored only when the meaningful payload or parent changes. Key ordering, known view/completion counters, token rotation in standalone signed-URL fields and top-level modification timestamps alone do not create versions. HTML/body changes are preserved exactly; repeated unchanged refreshes do not accumulate copies. Reverting to old wording records a new observation. Snapshots and the current-content/change-feed update commit together. Existing refresh completeness and historical-visibility rules still apply.
+
+`observedAt` is when that cached payload was retrieved; `capturedAt` is when it was saved to history. `source: baseline` identifies cached content saved on enable or before replacement, with its original observation time, not a new live check. `source: refresh` includes the observing run ID when available. Each snapshot also retains archive presence/detail provenance; source modification dates, if supplied, remain in `item`. Detection time is **not the actual edit time**. Routine incremental checks can reuse cached detail; use a scoped `check --deep` when explicitly requesting fresh bodies. Edits between observations and edits made before history was enabled cannot be recovered. History is a private local record, not independent proof of when Blackboard was edited.
+
+Retention is manual: `--keep N` previews removal of all but the newest N versions **per item** in the selected courses; only `--apply` deletes those older snapshots. It retains at least one version and does not change current content, existing file versions or the change feed. There is no silent pruning on disable or automatic age limit. History can grow with genuine changes. Pruning makes SQLite pages reusable but does not necessarily shrink the database file; existing private migration backups are separate and still contain their original data. Back up the database, including history, with the rest of your archive. Exports and vault merges continue to show current content only. Use an updated CLI for refreshes; older CLI versions do not record history.

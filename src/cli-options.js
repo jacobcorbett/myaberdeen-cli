@@ -3,6 +3,7 @@ import { OFFLINE_READ_COMMANDS } from './offline-reading.js';
 const COMMON = ['course', 'term', 'profile', 'active', 'all', 'json'];
 const ALLOWED = {
   ...Object.fromEntries(OFFLINE_READ_COMMANDS.map(command => [command, [...COMMON, 'format', 'id', 'search', 'limit']])),
+  'content-history': [...COMMON, 'enable', 'disable', 'id', 'version', 'keep', 'apply'],
   setup: ['course', 'vault', 'academic-start-year'],
   login: [], paths: [], help: [], version: [],
   'panopto-login': [],
@@ -24,7 +25,7 @@ const ALLOWED = {
   doctor: ['live', 'json', 'headed'], 'verify-files': COMMON,
   'relocate-files': [...COMMON, 'from', 'to', 'apply'], repair: ['json']
 };
-const VALUES = new Set(['course', 'term', 'profile', 'limit-courses', 'limit-files', 'since', 'limit', 'id', 'from', 'to', 'resume', 'folder', 'limit-recordings', 'search', 'language', 'format', 'max-bytes', 'vault', 'academic-start-year']);
+const VALUES = new Set(['course', 'term', 'profile', 'limit-courses', 'limit-files', 'since', 'limit', 'id', 'from', 'to', 'resume', 'folder', 'limit-recordings', 'search', 'language', 'format', 'max-bytes', 'vault', 'academic-start-year', 'version', 'keep']);
 export function parseArgs(args) {
   if (args.length === 1 && args[0] === '--version') return { command: 'version', options: {} };
   if (!args.length || args.includes('-h') || args.includes('--help')) return { command: 'help', options: {} };
@@ -39,7 +40,7 @@ export function parseArgs(args) {
     if (name === 'course') options.course = [...(options.course || []), value];
     else { if (options[key] !== undefined) throw new Error(`--${name} was provided twice.`); options[key] = value; }
   }
-  for (const key of ['limitCourses', 'limitFiles', 'limit', 'resume', 'limitRecordings', 'maxBytes']) if (options[key] !== undefined) {
+  for (const key of ['limitCourses', 'limitFiles', 'limit', 'resume', 'limitRecordings', 'maxBytes', 'version', 'keep']) if (options[key] !== undefined) {
     options[key] = Number(options[key]); if (!Number.isSafeInteger(options[key]) || options[key] < 1) throw new Error(`${key} must be a positive integer.`);
   }
   if (options.academicStartYear !== undefined) {
@@ -49,7 +50,12 @@ export function parseArgs(args) {
   if (options.active) { if (options.profile) throw new Error('Choose --active or --profile.'); options.profile = 'current'; }
   if (options.all && (options.course || options.term || options.profile)) throw new Error('--all cannot be combined with a narrower selection.');
   if (options.resume && (options.course || options.term || options.profile || options.all)) throw new Error('--resume uses the original bounded selection.');
-  if (['sync', 'check', 'download', 'refresh', 'export', 'merge-vault', 'relocate-files', 'extract', 'panopto-sync', 'panopto-download', 'recordings', 'recording', 'transcript', 'test-reviews', 'roster', ...OFFLINE_READ_COMMANDS].includes(command) && !options.all && !options.course && !options.term && !options.profile && !options.resume) throw new Error('Choose --course, --term, --profile, --active, or explicitly --all.');
+  if (['sync', 'check', 'download', 'refresh', 'export', 'merge-vault', 'relocate-files', 'extract', 'panopto-sync', 'panopto-download', 'recordings', 'recording', 'transcript', 'test-reviews', 'roster', 'content-history', ...OFFLINE_READ_COMMANDS].includes(command) && !options.all && !options.course && !options.term && !options.profile && !options.resume) throw new Error('Choose --course, --term, --profile, --active, or explicitly --all.');
+  if (command === 'content-history') {
+    if ([options.enable, options.disable, options.keep !== undefined, options.id !== undefined].filter(Boolean).length > 1) throw new Error('Choose one history action: --enable, --disable, --keep N or --id ID.');
+    if (options.version && !options.id) throw new Error('--version requires --id.');
+    if (options.apply && !options.keep) throw new Error('--apply requires --keep N.');
+  }
   if (command === 'relocate-files' && (!options.from || !options.to)) throw new Error('relocate-files requires --from and --to.');
   if (['show', 'recording', 'transcript', 'panopto-download'].includes(command) && !options.id) throw new Error(`${command} requires --id and a course selection.`);
   if (['test-reviews', 'roster', ...OFFLINE_READ_COMMANDS].includes(command) && options.format && !['json', 'text'].includes(options.format)) throw new Error(`${command} --format must be json or text.`);

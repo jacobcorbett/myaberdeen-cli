@@ -58,6 +58,7 @@ try {
     if (db.db.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw new Error('SQLite integrity failed');
     db.upsertCourse({id:'synthetic',courseId:'CS1000_27',name:'Synthetic course',isAvailable:true});
     db.startRun();
+    db.upsertContent('synthetic', null, {id:'page',title:'Synthetic page',body:'Synthetic baseline wording'});
     storeRecording(db, 'synthetic', {id:'11111111-1111-1111-1111-111111111111',url:viewerUrl('11111111-1111-1111-1111-111111111111'),title:'Synthetic recording',duration:3,transcripts:{'1':{captions:[{start:0,duration:3,text:'Synthetic transcript'}]}}});
     db.close();
     if (chromium.name() !== 'chromium') throw new Error('Missing Playwright browser dependency');
@@ -66,6 +67,10 @@ try {
   `;
   execFileSync(runtime, ['--input-type=module', '-e', fixture], { cwd: app, env, stdio: 'inherit' });
   JSON.parse(run(['status']));
+  assert.equal(JSON.parse(run(['content-history', '--course', 'CS1000_27', '--enable'])).versions, 1);
+  const contentVersion = JSON.parse(run(['content-history', '--course', 'CS1000_27', '--id', 'page']))[0].version;
+  assert.equal(JSON.parse(run(['content-history', '--course', 'CS1000_27', '--id', 'page', '--version', String(contentVersion)])).after.text, 'Synthetic baseline wording');
+  assert.equal(JSON.parse(run(['content-history', '--course', 'CS1000_27', '--disable'])).versions, 1);
   assert.equal(JSON.parse(run(['recordings', '--course', 'CS1000_27']))[0].captionCount, 1);
   assert.match(run(['transcript', '--course', 'CS1000_27', '--id', '11111111-1111-1111-1111-111111111111', '--format', 'srt']), /Synthetic transcript/);
   assert.equal(JSON.parse(run(['doctor'])).databaseIntegrity, 'ok');

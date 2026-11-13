@@ -168,11 +168,11 @@ async function syncContent(ctx) {
         try {
           item = await session.getJson(`/learn/api/v1/courses/${encodeURIComponent(course.id)}/contents/${encodeURIComponent(summary.id)}?expand=assignedGroups,selfEnrollmentGroups.group,gradebookCategory`);
           if (item?.id !== summary.id) throw new Error('Content detail returned an unexpected ID.');
-          database.upsertContent(course.id, parentId, item); complete = true;
+          database.upsertContent(course.id, parentId, item, { detailStatus: 'complete' }); complete = true;
         } catch (error) {
           fatal(error, signal);
           database.recordSyncError(runId, course.id, 'content-detail', new Error(`${summary.id}: ${safeMessage(error)}`));
-          if (!previous) database.upsertContent(course.id, parentId, summary);
+          if (!previous) database.upsertContent(course.id, parentId, summary, { detailStatus: 'summary' });
           else database.observe('content', course.id, summary.id, previous, { unchanged: true });
         }
         database.rememberSummary(course.id, parentId, summary, complete);
@@ -186,7 +186,7 @@ async function syncContent(ctx) {
         try {
           const linked = await session.getJson(item.contentDetailUrl);
           if (!linked?.id) throw new Error('Linked content returned no ID.');
-          database.upsertContent(course.id, parentId, linked); discover(linked);
+          database.upsertContent(course.id, parentId, linked, { detailStatus: 'complete' }); discover(linked);
           if (isContainer(linked)) queue.push(linked.id);
         } catch (error) { fatal(error, signal); database.recordSyncError(runId, course.id, 'linked-content', error); }
       }

@@ -1,7 +1,7 @@
-// Last reviewed against Node.js security releases on 2026-11-03.
-export const NODE_MINIMUMS = Object.freeze({ 26: '26.13.0' });
-export const NODE_RANGE = '>=26.13.0 <27';
-export const RELEASE_NODE = '26.13.0';
+// Last reviewed against Node.js security releases on 2026-11-13.
+export const NODE_MINIMUMS = Object.freeze({ 26: '26.13.1' });
+export const NODE_RANGE = '>=26.13.1 <27';
+export const RELEASE_NODE = '26.13.1';
 
 export function versionParts(value) {
   const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(value));
