@@ -1,53 +1,75 @@
-name: Merge checked release PRs
+name: Merge checked PRs
 on:
   workflow_run:
     workflows: [Check]
     types: [completed]
-    branches: [release-please--branches--main--components--myaberdeen-cli]
+  pull_request_target:
+    types: [auto_merge_enabled]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: release-auto-merge
+  group: checked-auto-merge
   cancel-in-progress: false
 jobs:
   merge:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Merge the owner release PR after required checks pass
+      # Deliberately no checkout, artifact download or execution of PR code.
+      - name: Honour owner auto-merge requests after exact-head checks
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           GH_REPO: ${{ github.repository }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           EVENT_NAME: ${{ github.event_name }}
           CHECKED_SHA: ${{ github.event.workflow_run.head_sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           TRIGGERING_ACTOR: ${{ github.triggering_actor }}
         shell: bash
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == workflow_dispatch && "$TRIGGERING_ACTOR" != "$REPOSITORY_OWNER" ]]; then
-            echo 'Only the repository owner may dispatch release merging.'
+            echo 'Only the repository owner may dispatch checked merging.'
             exit 1
           fi
           if [[ -z "$GH_TOKEN" ]]; then
             echo '::error::RELEASE_PLEASE_TOKEN is required.'
             exit 1
           fi
-          branch='release-please--branches--main--components--myaberdeen-cli'
-          prs=$(gh pr list --state open --base main --head "$branch" \
-            --author "$REPOSITORY_OWNER" --label 'autorelease: pending' \
-            --json number,headRefOid,isCrossRepository,isDraft)
-          while IFS=$'\t' read -r number sha; do
-            if [[ "$EVENT_NAME" == workflow_run && "$sha" != "$CHECKED_SHA" ]]; then
-              echo "Release PR #$number has changed since this check run; waiting for its checks."
+          prs=$(gh pr list --state open --base main --limit 1000 --json number,autoMergeRequest,headRefName)
+          while read -r number; do
+            if [[ -n "$PR_NUMBER" && "$number" != "$PR_NUMBER" ]]; then continue; fi
+            pr=$(gh pr view "$number" --json state,baseRefName,isDraft,headRefOid,mergeable,reviewDecision,reviews,autoMergeRequest,author,headRefName,labels,isCrossRepository)
+            if ! jq -e --arg owner "$REPOSITORY_OWNER" '
+              .state == "OPEN" and .baseRefName == "main" and .isDraft == false and
+              .mergeable == "MERGEABLE" and
+              ((.autoMergeRequest.enabledBy.login == $owner and .autoMergeRequest.mergeMethod == "SQUASH") or
+               (.author.login == $owner and .isCrossRepository == false and
+                .headRefName == "release-please--branches--main--components--myaberdeen-cli" and
+                any(.labels[]; .name == "autorelease: pending"))) and
+              (.reviewDecision == "" or .reviewDecision == "APPROVED") and
+              ([.reviews[] | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
+                | sort_by(.submittedAt) | group_by(.author.login) | all(.[-1].state != "CHANGES_REQUESTED"))
+            ' <<< "$pr" >/dev/null; then
+              echo "PR #$number is not ready or has no authorised owner merge request."
               continue
             fi
-            if ! gh pr checks "$number" --required; then
-              echo "Release PR #$number is waiting for successful required checks."
+            sha=$(jq -r .headRefOid <<< "$pr")
+            if [[ "$EVENT_NAME" == workflow_run && "$sha" != "$CHECKED_SHA" ]]; then continue; fi
+            if ! checks=$(gh pr checks "$number" --required --json name,state); then
+              echo "PR #$number is waiting for successful required checks."
               continue
             fi
-            # The owner-only update rule needs an explicit owner override.
-            # Required checks were verified above; never use this before that guard.
+            if ! jq -e '
+              length >= 4 and all(.state == "SUCCESS") and
+              (map(.name) | contains(["check (ubuntu-latest)", "check (macos-latest)", "check (windows-latest)", "security"]))
+            ' <<< "$checks" >/dev/null; then
+              echo "PR #$number is missing a successful required check."
+              continue
+            fi
+            # Owner-only ref updates require the owner credential/override even
+            # for native auto-merge. CI and review gates above remain mandatory.
             gh pr merge "$number" --squash --admin --match-head-commit "$sha"
-          done < <(jq -r '.[] | select(.isCrossRepository == false and .isDraft == false) | [.number, .headRefOid] | @tsv' <<< "$prs")
+          done < <(jq -r --arg owner "$REPOSITORY_OWNER" '.[] | select(.autoMergeRequest.enabledBy.login == $owner or .headRefName == "release-please--branches--main--components--myaberdeen-cli") | .number' <<< "$prs")

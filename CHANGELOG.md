@@ -8,6 +8,8 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 ### Fixed
 
+- Honour owner-enabled squash auto-merge requests after required CI and review gates pass, using the owner credential without weakening protected-ref rules.
+
 - Raise the supported Node minimum and portable runtime pin to security patch 26.13.1; source installations on 26.13.0 must update Node.
 
 ### Added
