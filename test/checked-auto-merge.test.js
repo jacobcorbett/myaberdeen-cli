@@ -7,12 +7,23 @@ import { spawnSync } from 'node:child_process';
 
 // Exercise the actual privileged workflow shell with a synthetic gh executable.
 const workflow = fs.readFileSync('.github/workflows/release-auto-merge.yml', 'utf8');
-const script = workflow.split('        run: |\n')[1].replace(/^ {10}/gm, '');
+function workflowScript(text) {
+  return text.replace(/\r\n/g, '\n').split('        run: |\n')[1].replace(/^ {10}/gm, '');
+}
+const script = workflowScript(workflow);
+const skipShell = process.platform === 'win32' ? 'The merge job runs on Linux.'
+  : spawnSync('jq', ['--version']).status !== 0 ? 'Install jq to exercise the workflow shell locally.' : false;
+
+test('workflow shell extraction accepts LF and Windows CRLF checkouts', () => {
+  const lf = workflow.replace(/\r\n/g, '\n');
+  assert.equal(workflowScript(lf.replace(/\n/g, '\r\n')), workflowScript(lf));
+  assert.match(script, /set -euo pipefail/);
+});
 const checks = ['check (ubuntu-latest)', 'check (macos-latest)', 'check (windows-latest)', 'security'].map(name => ({ name, state: 'SUCCESS' }));
 const request = { enabledBy: { login: 'owner' }, mergeMethod: 'SQUASH' };
 const pr = { state: 'OPEN', baseRefName: 'main', isDraft: false, headRefOid: 'checked-head', mergeable: 'MERGEABLE', reviewDecision: '', reviews: [], autoMergeRequest: request };
 
-test('checked auto-merge requires live owner intent, exact head, reviews and every successful required check', { skip: process.platform === 'win32' }, t => {
+test('checked auto-merge requires live owner intent, exact head, reviews and every successful required check', { skip: skipShell }, t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'myab-merge-policy-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const log = path.join(dir, 'merge.log');
