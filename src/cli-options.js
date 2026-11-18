@@ -15,10 +15,10 @@ const ALLOWED = {
   transcript: [...COMMON, 'id', 'language', 'format'],
   'panopto-download': [...COMMON, 'id', 'headed', 'dry-run', 'max-bytes'],
   courses: [...COMMON, 'headed', 'limit-courses'],
-  sync: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'download-files', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
+  sync: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'include-videos', 'download-files', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
   check: [...COMMON, 'headed', 'limit-courses', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
-  download: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
-  refresh: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
+  download: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'include-videos', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
+  refresh: [...COMMON, 'headed', 'limit-courses', 'limit-files', 'include-videos', 'dry-run', 'deep', 'roster', 'resume', 'extract', 'panopto', 'limit-recordings'],
   export: [...COMMON, 'dry-run'], 'merge-vault': [...COMMON, 'dry-run', 'keep-duplicates'],
   extract: COMMON,
   status: COMMON, brief: COMMON, changes: [...COMMON, 'since', 'limit'], show: [...COMMON, 'id'],
@@ -49,6 +49,7 @@ export function parseArgs(args) {
   }
   if (options.active) { if (options.profile) throw new Error('Choose --active or --profile.'); options.profile = 'current'; }
   if (options.all && (options.course || options.term || options.profile)) throw new Error('--all cannot be combined with a narrower selection.');
+  if (command === 'sync' && options.includeVideos && !options.downloadFiles && !options.resume) throw new Error('--include-videos requires --download-files with sync.');
   if (options.resume && (options.course || options.term || options.profile || options.all)) throw new Error('--resume uses the original bounded selection.');
   if (['sync', 'check', 'download', 'refresh', 'export', 'merge-vault', 'relocate-files', 'extract', 'panopto-sync', 'panopto-download', 'recordings', 'recording', 'transcript', 'test-reviews', 'roster', 'content-history', ...OFFLINE_READ_COMMANDS].includes(command) && !options.all && !options.course && !options.term && !options.profile && !options.resume) throw new Error('Choose --course, --term, --profile, --active, or explicitly --all.');
   if (command === 'content-history') {
@@ -73,6 +74,7 @@ export function courseQueries(config, options) {
 }
 
 export function resumedOptions(options, saved) {
-  return { ...options, downloadFiles: !!saved.downloadFiles, roster: options.roster ?? !!saved.roster, deep: options.deep ?? !!saved.deep,
+  if (options.includeVideos && !saved.downloadFiles) throw new Error('--include-videos requires a file download run.');
+  return { ...options, downloadFiles: !!saved.downloadFiles, includeVideos: options.includeVideos ?? !!saved.includeVideos, roster: options.roster ?? !!saved.roster, deep: options.deep ?? !!saved.deep,
     limitFiles: options.limitFiles ?? saved.limitFiles ?? undefined };
 }

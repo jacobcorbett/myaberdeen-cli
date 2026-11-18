@@ -14,7 +14,7 @@ import { mergeVault } from '../src/merge.js';
 import { exportArchive } from '../src/export.js';
 import { atomicWrite, hash, acquireLock } from '../src/io.js';
 import { verifyFiles, relocationPlan, applyRelocation } from '../src/health.js';
-import { parseArgs } from '../src/cli-options.js';
+import { parseArgs, resumedOptions } from '../src/cli-options.js';
 
 const baseUrl = 'https://abdn.blackboard.com';
 const course = { id: 'course', courseId: 'CS1000_27', name: 'Test course', termId: 'term', isAvailable: true };
@@ -240,6 +240,49 @@ test('metadata refresh preserves grade-column detail after a failed column looku
   assert.equal(result.status, 'partial'); assert.equal(row.title, 'Assessment'); assert.equal(row.score, 2);
 });
 
+test('Blackboard video files require opt-in and count towards the file budget', async t => {
+  const { database, config } = fixture(t);
+  const files = [
+    { id: 'a', title: 'Recorded lecture', contentDetail: { 'resource/x-bb-file': { file: { mimeType: 'video/mp4', permanentUrl: '/video-a' } } } },
+    { id: 'b', title: 'lecture.mov' },
+    { id: 'slides', title: 'slides.pdf' }
+  ].map(item => ({ ...item, contentHandler: { id: 'resource/x-bb-file' } }));
+  const session = sessionFor(route => {
+    if (route.endsWith('/ROOT/children')) return { results: files };
+    return files.find(file => route.endsWith('/contents/' + file.id));
+  });
+  const attempts = [];
+  session.getBinary = async route => {
+    attempts.push(route);
+    return { body: Buffer.from(route) };
+  };
+
+  const args = { session, database, config, downloadFiles: true, limitFiles: 1 };
+  const defaults = await syncArchive(args);
+  assert.equal(defaults.status, 'completed');
+  assert.deepEqual(attempts.splice(0), ['/ultra/courses/course/outline/file/slides?courseId=course']);
+
+  const optedIn = await syncArchive({ ...args, includeVideos: true });
+  assert.equal(optedIn.deferredFiles, 2);
+  assert.deepEqual(attempts, ['/video-a']);
+  const saved = JSON.parse(database.db.prepare('SELECT options_json FROM sync_runs WHERE id=?').get(optedIn.runId).options_json);
+  const resumed = await syncArchive({ ...args, ...resumedOptions({ limitFiles: 2 }, saved), resumeFrom: optedIn.runId });
+  assert.equal(resumed.status, 'completed');
+  assert.equal(attempts.filter(route => route === '/video-a').length, 1);
+  assert.ok(database.getFile(course.id, 'a'));
+  assert.ok(database.getFile(course.id, 'b'));
+});
+
+test('video opt-in is accepted on file download commands', () => {
+  for (const command of ['download', 'refresh']) {
+    assert.equal(parseArgs([command, '--course', 'CS1000', '--include-videos']).options.includeVideos, true);
+  }
+  assert.equal(parseArgs(['sync', '--course', 'CS1000', '--download-files', '--include-videos']).options.includeVideos, true);
+  assert.throws(() => parseArgs(['sync', '--course', 'CS1000', '--include-videos']), /requires --download-files/);
+  assert.throws(() => parseArgs(['check', '--course', 'CS1000', '--include-videos']), /Unsupported option/);
+  assert.throws(() => resumedOptions({ includeVideos: true }, { downloadFiles: false }), /requires a file download run/);
+});
+
 test('resuming a bounded file run advances past already completed files', async t => {
   const { database, config } = fixture(t); const files = ['one', 'two'].map(id => ({ id, title: id + '.pdf', contentHandler: { id: 'resource/x-bb-file' } }));
   const session = sessionFor(p => { if (p.endsWith('/ROOT/children')) return { results: files }; return files.find(f => p.endsWith('/contents/' + f.id)); });
@@ -295,10 +338,9 @@ test('scoped deduplication keeps a raw file still referenced by an unselected co
   mergeVault(database, config, { courseIds: ['selected'] }); assert.ok(fs.existsSync(raw)); assert.equal(database.getFile('other', 'file').local_path, raw);
 });
 
-test('resume preserves bounded settings while allowing an explicit new file limit', async () => {
-  const { resumedOptions } = await import('../src/cli-options.js');
+test('resume preserves bounded settings while allowing an explicit new file limit', () => {
   const saved = { downloadFiles: true, deep: true, limitFiles: 2 };
-  assert.deepEqual(resumedOptions({ resume: 7 }, saved), { resume: 7, downloadFiles: true, roster: false, deep: true, limitFiles: 2 });
+  assert.deepEqual(resumedOptions({ resume: 7 }, saved), { resume: 7, downloadFiles: true, includeVideos: false, roster: false, deep: true, limitFiles: 2 });
   assert.equal(resumedOptions({ resume: 7, limitFiles: 4 }, saved).limitFiles, 4);
   assert.equal(resumedOptions({ resume: 7 }, { downloadFiles: false, deep: false, limitFiles: null }).downloadFiles, false);
 });

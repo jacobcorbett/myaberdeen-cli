@@ -14,6 +14,8 @@ Entries describe what changed for users, why it changed, and any limits or upgra
 
 ### Added
 
+- Add `--include-videos` to opt in to downloading Blackboard video attachments within the selected courses and normal file limits.
+
 - Optional per-course content history, disabled by default. Seed cached wording on enable, retain original JSON and provenance only on meaningful changes, read before/after text offline, inspect payload storage and preview explicit retention pruning. Disable without deleting history; past unrecorded edits cannot be recovered. Existing archives receive a private migration backup.
 
 - Read cached announcements, grades, messages and discussions with dedicated scoped offline commands. JSON retains original payloads and archive provenance; text shows readable bodies, scores, conversation/thread context and freshness. Filter by ID or text and limit results per course. These commands do not open Chrome or refresh the archive.
