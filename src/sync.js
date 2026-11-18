@@ -6,7 +6,7 @@ import { syncRoster } from './roster.js';
 import { syncAssessmentReviews } from './assessment-reviews.js';
 import { fingerprint, throwIfAborted, safeMessage } from './io.js';
 
-export async function syncArchive({ session, database, config, courseQuery, selectedIds, resumeFrom, limitCourses, limitFiles, downloadFiles = false, deep = false, roster = false, signal, onProgress = () => {} }) {
+export async function syncArchive({ session, database, config, courseQuery, selectedIds, resumeFrom, limitCourses, limitFiles, downloadFiles = false, includeVideos = false, deep = false, roster = false, signal, onProgress = () => {} }) {
   const runId = database.startRun();
   const stats = { courses: 0, selected: 0, inaccessible: 0, downloaded: 0, notModified: 0, unchanged: 0, deferredFiles: 0 };
   let courses;
@@ -21,7 +21,7 @@ export async function syncArchive({ session, database, config, courseQuery, sele
       courses.sort((a, b) => (lastAttempts.get(a.id) || 0) - (lastAttempts.get(b.id) || 0));
     }
     stats.selected = courses.length;
-    database.setScope(runId, courses, { downloadFiles, deep, roster, limitFiles: limitFiles || null });
+    database.setScope(runId, courses, { downloadFiles, includeVideos, deep, roster, limitFiles: limitFiles || null });
     onProgress(`Selected ${courses.length}: ${courses.map(c => `${courseCode(c)} — ${c.name || ''}`).join('; ')}`);
     const budget = { remaining: limitFiles ?? Infinity };
     for (const membership of courses) {
@@ -83,7 +83,7 @@ export async function syncArchive({ session, database, config, courseQuery, sele
         for (const candidate of candidates) {
           throwIfAborted(signal);
           const item = JSON.parse(candidate.json);
-          if (isVideo(item)) continue;
+          if (!includeVideos && isVideo(item)) continue;
           if (completed.has(item.id)) { database.db.prepare("INSERT OR REPLACE INTO file_checks VALUES(?,?,?,'completed')").run(runId, course.id, item.id); continue; }
           if (budget.remaining <= 0) { stats.deferredFiles++; continue; }
           budget.remaining--;

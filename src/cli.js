@@ -177,10 +177,10 @@ async function runSync() {
       if (options.dryRun || options.term) {
         const { memberships, terms } = await getAccountOverview(session), names = new Map(terms.map(t => [t.id, t.name]));
         const courses = selected(memberships.map(m => { const c = courseFromMembership(m); return { ...c, term_name: names.get(c?.termId) }; }), resumeIds || courseQueries(config, options)).slice(0, options.limitCourses);
-        if (options.dryRun) { output({ dryRun: true, downloadFiles, roster: !!options.roster, courses }); return; }
+        if (options.dryRun) { output({ dryRun: true, downloadFiles, includeVideos: !!options.includeVideos, roster: !!options.roster, courses }); return; }
         resumeIds = courses.map(c => c.id);
       }
-      const result = await syncArchive({ session, database, config, courseQuery: courseQueries(config, options), selectedIds: resumeIds, resumeFrom: options.resume, limitCourses: options.limitCourses, limitFiles: options.limitFiles, downloadFiles, deep: !!options.deep, roster: !!options.roster, signal: controller.signal, onProgress: message => console.error(message) });
+      const result = await syncArchive({ session, database, config, courseQuery: courseQueries(config, options), selectedIds: resumeIds, resumeFrom: options.resume, limitCourses: options.limitCourses, limitFiles: options.limitFiles, downloadFiles, includeVideos: !!options.includeVideos, deep: !!options.deep, roster: !!options.roster, signal: controller.signal, onProgress: message => console.error(message) });
       if (options.panopto) {
         const courses = database.db.prepare('SELECT * FROM courses').all().filter(c => result.courseIds.includes(c.id));
         result.panopto = await syncPanopto({ session, database, config, courses, limitRecordings: options.limitRecordings, signal: controller.signal, onProgress: message => console.error(message) });
@@ -214,7 +214,8 @@ Mutating/archive commands require explicit scope. --active uses config.profiles.
 Preview: --dry-run on check/sync/refresh/download/export/merge-vault
 Sync: --limit-courses N, --limit-files N, --deep, --resume <run-id>, --headed, --extract
 Panopto sync: --course/--active/--all [--limit-recordings N] [--folder UUID] [--dry-run]
-Or add --panopto to check/sync/refresh; video downloads remain explicit.
+Blackboard video attachments: --include-videos on download/refresh or sync --download-files.
+Panopto metadata and captions: add --panopto to check/sync/refresh.
 Panopto read: recordings --course CODE [--search TEXT]; recording --course CODE --id UUID
 Transcript: --course CODE --id UUID [--language NAME] [--format text|json|srt|vtt]
 Panopto download: --course CODE --id UUID [--dry-run] [--max-bytes N] (default 2 GiB)

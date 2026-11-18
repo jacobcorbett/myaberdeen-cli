@@ -59,6 +59,8 @@ Here `myab` means the installed command. In an extracted portable folder, use `.
 
 Read the [installation guide](docs/installation.md) for checksum verification, OS security prompts, source installation and updates. Source installs require Node **26.13.1 or newer within Node 26**. Refreshes run on demand; the CLI does not install a background schedule.
 
+To include Blackboard video attachments in a file download, run `myab download --course CODE --include-videos`. See [file downloads](docs/usage.md#incremental-behaviour-and-integrity).
+
 ## Optional content history
 
 Preserve course-page wording before it changes with `myab content-history --active --enable`. This is **off by default**, enables history only for the selected courses, and seeds their current cached content without contacting Blackboard. List versions with `myab content-history --course CODE --id CONTENT_ID`; add `--version N` to read the original JSON and before/after text. Inspect storage, disable recording or preview explicit pruning with the same command. See [content history](docs/usage.md#content-history) for commands, disk use and evidence limits.

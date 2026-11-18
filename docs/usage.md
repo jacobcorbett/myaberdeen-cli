@@ -43,7 +43,7 @@ A failed detail request preserves the previous complete body. Recoverable folder
 
 Downloads save opaque ETag/Last-Modified validators alongside a verified file. Subsequent conditional requests can return 304 without transferring a file body. Conditions survive approved Blackboard file redirects; authentication headers and browser cookies do not. Missing or changed local files trigger a full fetch. Legacy files have no trustworthy validator pair, so their first refresh may need one bounded baseline download. A current HEAD response alone does not prove that an older local file matches it.
 
-SHA-256 remains the local integrity check. Changed versions get a hash suffix; earlier versions are kept and catalogued. Unchanged content is not rewritten. Files, JSON and generated Markdown are written atomically. API/file errors and browser navigation diagnostics redact authentication URLs and headers. Ordinary Blackboard video files are skipped. Panopto has a separate, opt-in read-only integration; other external LTI services remain links.
+SHA-256 remains the local integrity check. Changed versions get a hash suffix; earlier versions are kept and catalogued. Unchanged content is not rewritten. Files, JSON and generated Markdown are written atomically. API/file errors and browser navigation diagnostics redact authentication URLs and headers. Blackboard video attachments are skipped by default. Use `--include-videos` with `download`, `refresh` or `sync --download-files` to include them alongside other files. Videos count towards the normal file-attempt limit, and a resumed run retains the video setting. Panopto uses its [separate download command](panopto.md).
 
 ```sh
 myab refresh --course CS4028_27 --limit-files 1
